@@ -1,0 +1,101 @@
+{
+  "training_date": "2025-09-30T09:41:22.486948",
+  "config": {
+    "algorithm": "xgboost",
+    "test_size": 0.3,
+    "random_state": 42,
+    "hyperparameters": {}
+  },
+  "results": {
+    "model_stats": {
+      "accuracy": 0.9181184668989547,
+      "precision": 0.9179246820601433,
+      "recall": 0.9181184668989547,
+      "f1_score": 0.9179065338680258,
+      "training_samples": 6694,
+      "last_trained": "2025-09-30T09:41:22.424429",
+      "algorithm": "xgboost"
+    },
+    "classification_report": {
+      "CONFIRMED": {
+        "precision": 0.8459167950693375,
+        "recall": 0.8133333333333334,
+        "f1-score": 0.8293051359516616,
+        "support": 675.0
+      },
+      "FALSE POSITIVE": {
+        "precision": 0.8203677510608204,
+        "recall": 0.8430232558139535,
+        "f1-score": 0.8315412186379929,
+        "support": 688.0
+      },
+      "CANDIDATE": {
+        "precision": 0.9947159841479525,
+        "recall": 0.9993364299933643,
+        "f1-score": 0.997020854021847,
+        "support": 1507.0
+      },
+      "accuracy": 0.9181184668989547,
+      "macro avg": {
+        "precision": 0.8870001767593702,
+        "recall": 0.885231006380217,
+        "f1-score": 0.8859557362038338,
+        "support": 2870.0
+      },
+      "weighted avg": {
+        "precision": 0.9179246820601435,
+        "recall": 0.9181184668989547,
+        "f1-score": 0.9179065338680259,
+        "support": 2870.0
+      }
+    },
+    "feature_importance": {
+      "koi_pdisposition": 0.759177029132843,
+      "koi_score": 0.058778002858161926,
+      "koi_fpflag_nt": 0.00021945274784229696,
+      "koi_fpflag_ss": 0.002247842727228999,
+      "koi_fpflag_co": 0.004776382353156805,
+      "koi_fpflag_ec": 0.0047074356116354465,
+      "koi_period": 0.004965667147189379,
+      "koi_period_err1": 0.003378861816599965,
+      "koi_period_err2": 0.0037128643598407507,
+      "koi_time0bk": 0.0029004153329879045,
+      "koi_time0bk_err1": 0.0035326930228620768,
+      "koi_time0bk_err2": 0.004743149969726801,
+      "koi_impact": 0.007039505522698164,
+      "koi_impact_err1": 0.0029519263189285994,
+      "koi_impact_err2": 0.0036648972891271114,
+      "koi_duration": 0.004605378955602646,
+      "koi_duration_err1": 0.0037049350794404745,
+      "koi_duration_err2": 0.004502101335674524,
+      "koi_depth": 0.0029022186063230038,
+      "koi_depth_err1": 0.004203587304800749,
+      "koi_depth_err2": 0.0027164528146386147,
+      "koi_prad": 0.004173874389380217,
+      "koi_prad_err1": 0.007406638935208321,
+      "koi_prad_err2": 0.00548129016533494,
+      "koi_teq": 0.002526577329263091,
+      "koi_teq_err1": 0.0,
+      "koi_teq_err2": 0.0,
+      "koi_insol": 0.002637085970491171,
+      "koi_insol_err1": 0.0032485444098711014,
+      "koi_insol_err2": 0.0032496550120413303,
+      "koi_model_snr": 0.035160284489393234,
+      "koi_tce_plnt_num": 0.007006798405200243,
+      "koi_tce_delivname": 0.0008266707882285118,
+      "koi_steff": 0.0029856041073799133,
+      "koi_steff_err1": 0.004179398529231548,
+      "koi_steff_err2": 0.003718387335538864,
+      "koi_slogg": 0.003267070045694709,
+      "koi_slogg_err1": 0.0026130652986466885,
+      "koi_slogg_err2": 0.00289706839248538,
+      "koi_srad": 0.002816306659951806,
+      "koi_srad_err1": 0.0027461943682283163,
+      "koi_srad_err2": 0.0033864437136799097,
+      "ra": 0.0035501234233379364,
+      "dec": 0.003373959334567189,
+      "koi_kepmag": 0.0033180390018969774
+    },
+    "samples_used": 6694
+  }
+}
