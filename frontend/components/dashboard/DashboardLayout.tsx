@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import Sidebar from './Sidebar';
 
@@ -9,24 +9,13 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
   return (
     <div className="min-h-screen bg-space-gradient">
       {/* Sidebar */}
-      <Sidebar 
-        isCollapsed={sidebarCollapsed} 
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
-      />
+      <Sidebar />
 
       {/* Main Content */}
-      <motion.main
-        className={`transition-all duration-300 ${
-          sidebarCollapsed ? 'ml-16' : 'ml-64'
-        }`}
-        initial={false}
-        animate={{ marginLeft: sidebarCollapsed ? 64 : 256 }}
-      >
+      <main className="ml-64">
         {/* Header Bar */}
         <div className="bg-space-800/30 backdrop-blur-md border-b border-space-700 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -37,12 +26,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               </p>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span>Système Opérationnel</span>
-              </div>
-            </div>
+           
           </div>
         </div>
 
@@ -50,7 +34,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <div className="p-6">
           {children}
         </div>
-      </motion.main>
+      </main>
 
       {/* Background Effects */}
       <div className="fixed inset-0 pointer-events-none z-0">

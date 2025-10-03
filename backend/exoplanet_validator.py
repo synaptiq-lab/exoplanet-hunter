@@ -1,11 +1,11 @@
 """
-Module de validation d'exoplanètes
-Analyse les planètes CANDIDATE et FALSE POSITIVE pour déterminer 
-lesquelles peuvent être confirmées comme vraies exoplanètes
+Module de validation d'exoplanètes - Version flexible
+S'adapte automatiquement aux 3 formats NASA (Kepler, TESS, K2)
+Utilise le modèle ML entraîné pour identifier les planètes confirmables
 """
 
 import polars as pl
-from typing import List, Dict, Tuple
+from typing import Dict, List, Any
 import logging
 from ml_pipeline import ml_pipeline
 
@@ -13,22 +13,23 @@ logger = logging.getLogger(__name__)
 
 class ExoplanetValidator:
     """
-    Validateur d'exoplanètes basé sur la méthode des transits
+    Valide et identifie les exoplanètes confirmables dans un dataset.
+    Fonctionne avec n'importe quel format tant qu'un modèle est entraîné.
     """
     
     def __init__(self):
-        self.required_columns = [
-            'kepoi_name',  # Nom de la planète
-            'koi_disposition',  # Statut actuel
-            'koi_period',  # Période orbitale
-            'koi_duration',  # Durée du transit
-            'koi_depth',  # Profondeur du transit
-            'koi_prad',  # Rayon planétaire
-        ]
+        pass
     
-    def validate_dataset(self, df: pl.DataFrame) -> Dict:
+    def validate_dataset(self, df: pl.DataFrame) -> Dict[str, Any]:
         """
-        Valide un dataset pour la confirmation d'exoplanètes
+        Valide qu'un dataset peut être analysé.
+        Vérifie simplement que le DataFrame n'est pas vide.
+        
+        Args:
+            df: DataFrame Polars
+            
+        Returns:
+            Dictionnaire avec is_valid, errors, warnings, info
         """
         validation = {
             'is_valid': True,
@@ -37,123 +38,167 @@ class ExoplanetValidator:
             'info': {}
         }
         
-        # Vérifier les colonnes requises
-        missing_cols = [col for col in self.required_columns if col not in df.columns]
-        if missing_cols:
+        # Vérification basique
+        if df.shape[0] == 0:
             validation['is_valid'] = False
-            validation['errors'].append(f"Colonnes manquantes: {missing_cols}")
+            validation['errors'].append("Dataset vide")
             return validation
         
-        # Analyser les statuts des planètes
-        if 'koi_disposition' in df.columns:
-            disposition_counts = df['koi_disposition'].value_counts()
-            validation['info']['disposition_distribution'] = {
-                row['koi_disposition']: row['count'] 
-                for row in disposition_counts.iter_rows(named=True)
-            }
-            
-            # Filtrer les planètes à analyser (CANDIDATE et FALSE POSITIVE)
-            candidates = df.filter(
-                (pl.col('koi_disposition') == 'CANDIDATE') | 
-                (pl.col('koi_disposition') == 'FALSE POSITIVE')
-            )
-            
-            validation['info']['candidates_to_analyze'] = candidates.shape[0]
-            validation['info']['total_planets'] = df.shape[0]
-            
-            if candidates.shape[0] == 0:
-                validation['warnings'].append("Aucune planète CANDIDATE ou FALSE POSITIVE trouvée à analyser")
+        validation['info']['total_rows'] = df.shape[0]
+        validation['info']['total_columns'] = df.shape[1]
+        
+        logger.info(f"Dataset validé: {df.shape[0]} lignes, {df.shape[1]} colonnes")
         
         return validation
     
-    def predict_confirmations(self, df: pl.DataFrame) -> Dict:
+    def predict_confirmations(self, df: pl.DataFrame) -> Dict[str, Any]:
         """
-        Prédit quelles planètes CANDIDATE/FALSE POSITIVE peuvent être confirmées
+        Prédit quelles planètes peuvent être confirmées en utilisant le modèle ML.
+        S'adapte automatiquement au format du dataset.
+        
+        Args:
+            df: DataFrame Polars avec les données originales
+            
+        Returns:
+            Dictionnaire avec les résultats de validation
         """
-        if not ml_pipeline.is_trained():
-            raise ValueError("Aucun modèle entraîné disponible. Entraînez d'abord un modèle sur des données avec des planètes CONFIRMED.")
+        # Vérifier que le modèle est entraîné
+        if not ml_pipeline.trained:
+            raise ValueError("Aucun modèle entraîné disponible. Entraînez d'abord un modèle sur des données labellisées.")
         
-        # Filtrer uniquement les planètes à analyser
-        candidates = df.filter(
-            (pl.col('koi_disposition') == 'CANDIDATE') | 
-            (pl.col('koi_disposition') == 'FALSE POSITIVE')
-        )
+        logger.info(f"Début de la validation - {df.shape[0]} objets")
         
-        if candidates.shape[0] == 0:
-            return {
-                'message': 'Aucune planète CANDIDATE ou FALSE POSITIVE à analyser',
-                'confirmed_planets': [],
-                'analysis_summary': {
-                    'total_analyzed': 0,
-                    'confirmed_count': 0,
-                    'rejected_count': 0
-                }
-            }
+        # Utiliser le modèle ML pour prédire
+        predictions = ml_pipeline.predict(df)
         
-        # Faire les prédictions
-        predictions = ml_pipeline.predict(candidates)
+        # Mapper les colonnes communes pour extraction des caractéristiques
+        char_mappings = {
+            'period': ['koi_period', 'pl_orbper', 'orbital_period'],
+            'duration': ['koi_duration', 'pl_trandur', 'transit_duration'],
+            'depth': ['koi_depth', 'pl_trandep', 'transit_depth'],
+            'radius': ['koi_prad', 'pl_rade', 'planet_radius']
+        }
         
-        # Analyser les résultats
+        # Séparer les planètes par prédiction
         confirmed_planets = []
         rejected_planets = []
         
-        for i, prediction in enumerate(predictions):
-            planet_data = candidates.row(i, named=True)
-            planet_name = planet_data.get('kepoi_name', f"Planète {i+1}")
+        for i, pred in enumerate(predictions):
+            # Extraire les caractéristiques depuis le DataFrame original
+            characteristics = {}
+            try:
+                row = df.row(i, named=True)
+                for char_key, possible_cols in char_mappings.items():
+                    for col in possible_cols:
+                        if col in row:
+                            val = row[col]
+                            # Vérifier que la valeur est valide (pas None, pas NaN)
+                            if val is not None and (not isinstance(val, float) or (val == val)):
+                                characteristics[char_key] = float(val)
+                                break
+            except Exception as e:
+                logger.warning(f"Impossible d'extraire caractéristiques pour {pred['planet_name']}: {e}")
             
-            result = {
-                'name': planet_name,
-                'original_status': planet_data['koi_disposition'],
-                'predicted_status': prediction['classification'],
-                'confidence': prediction['confidence_score'],
-                'characteristics': {
-                    'period': planet_data.get('koi_period'),
-                    'duration': planet_data.get('koi_duration'), 
-                    'depth': planet_data.get('koi_depth'),
-                    'radius': planet_data.get('koi_prad')
-                }
+            planet_data = {
+                'name': pred['planet_name'],
+                'original_status': pred.get('original_label', 'UNKNOWN'),
+                'predicted_status': pred['predicted_label'],
+                'confidence': pred['confidence'],
+                'probabilities': pred['probabilities'],
+                'characteristics': characteristics
             }
             
-            # Si le modèle prédit CONFIRMED avec une bonne confiance
-            if (prediction['classification'] == 'CONFIRMED' and 
-                prediction['confidence_score'] > 0.7):
-                confirmed_planets.append(result)
+            # Déterminer si la planète est confirmable
+            # Une planète est confirmable si:
+            # 1. Elle est prédite comme CONFIRMED
+            # 2. Avec une confiance > 70%
+            is_confirmable = (
+                pred['predicted_label'] in ['CONFIRMED', 'CP', 'Confirmed'] and
+                pred['confidence'] > 0.70
+            )
+            
+            if is_confirmable:
+                confirmed_planets.append(planet_data)
             else:
-                rejected_planets.append(result)
+                rejected_planets.append(planet_data)
         
-        return {
-            'message': f'Analyse terminée: {len(confirmed_planets)} planètes peuvent être confirmées',
-            'confirmed_planets': confirmed_planets,
-            'rejected_planets': rejected_planets,
-            'analysis_summary': {
-                'total_analyzed': len(predictions),
-                'confirmed_count': len(confirmed_planets),
-                'rejected_count': len(rejected_planets),
-                'confirmation_rate': len(confirmed_planets) / len(predictions) if predictions else 0
-            }
+        # Calculer les statistiques
+        total_analyzed = len(predictions)
+        confirmed_count = len(confirmed_planets)
+        rejected_count = len(rejected_planets)
+        
+        # Utiliser analysis_summary pour correspondre à l'interface frontend
+        analysis_summary = {
+            'total_analyzed': total_analyzed,
+            'confirmed_count': confirmed_count,
+            'rejected_count': rejected_count,
+            'confirmation_rate': confirmed_count / total_analyzed if total_analyzed > 0 else 0
         }
+        
+        # Message personnalisé
+        if confirmed_count > 0:
+            message = f"✅ {confirmed_count} planète(s) CANDIDATE/FALSE POSITIVE peuvent être confirmées !"
+        else:
+            message = "ℹ️ Aucune nouvelle planète confirmable trouvée dans ce dataset."
+        
+        results = {
+            'message': message,
+            'analysis_summary': analysis_summary,  # Nom corrigé pour le frontend
+            'confirmed_planets': confirmed_planets,  # Toutes les planètes confirmées
+            'rejected_planets': rejected_planets[:100],  # Limiter les rejetées à 100
+            'total_confirmed': len(confirmed_planets),
+            'total_rejected': len(rejected_planets)
+        }
+        
+        logger.info(f"Validation terminée: {confirmed_count} confirmables sur {total_analyzed}")
+        
+        return results
     
-    def get_planet_details(self, df: pl.DataFrame, planet_name: str) -> Dict:
+    def get_planet_details(self, df: pl.DataFrame, planet_name: str) -> Dict[str, Any]:
         """
-        Récupère les détails d'une planète spécifique
+        Récupère les détails d'une planète spécifique.
+        
+        Args:
+            df: DataFrame Polars
+            planet_name: Nom de la planète à rechercher
+            
+        Returns:
+            Dictionnaire avec les détails de la planète
         """
-        planet = df.filter(pl.col('kepoi_name') == planet_name)
-        
-        if planet.shape[0] == 0:
-            return {'error': f'Planète {planet_name} non trouvée'}
-        
-        planet_data = planet.row(0, named=True)
-        
-        return {
-            'name': planet_name,
-            'current_status': planet_data.get('koi_disposition'),
-            'orbital_period_days': planet_data.get('koi_period'),
-            'transit_duration_hours': planet_data.get('koi_duration'),
-            'transit_depth_ppm': planet_data.get('koi_depth'),
-            'planetary_radius_earth': planet_data.get('koi_prad'),
-            'stellar_temperature_k': planet_data.get('koi_steff'),
-            'kepler_magnitude': planet_data.get('koi_kepmag')
-        }
+        try:
+            # Trouver la colonne de nom de planète
+            planet_col = None
+            for col in ['planet_name', 'kepoi_name', 'toi', 'pl_name']:
+                if col in df.columns:
+                    planet_col = col
+                    break
+            
+            if not planet_col:
+                return {'error': 'Colonne de nom de planète non trouvée'}
+            
+            # Filtrer pour la planète demandée
+            planet_df = df.filter(pl.col(planet_col) == planet_name)
+            
+            if planet_df.shape[0] == 0:
+                return {'error': f'Planète {planet_name} non trouvée'}
+            
+            # Convertir en dictionnaire
+            planet_dict = planet_df.to_dicts()[0]
+            
+            # Nettoyer les valeurs nulles
+            cleaned_dict = {
+                k: (None if v is None or (isinstance(v, float) and (v != v)) else v)
+                for k, v in planet_dict.items()
+            }
+            
+            return {
+                'planet_name': planet_name,
+                'data': cleaned_dict
+            }
+            
+        except Exception as e:
+            logger.error(f"Erreur get_planet_details: {e}")
+            return {'error': str(e)}
 
-# Instance globale du validateur
+# Instance globale
 exoplanet_validator = ExoplanetValidator()

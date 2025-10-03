@@ -1,5 +1,6 @@
 """
 Utilitaires pour la gestion des données d'exoplanètes
+Supporte les formats Kepler, K2, TESS avec mapping automatique des colonnes
 """
 
 import polars as pl
@@ -7,16 +8,32 @@ import pandas as pd
 import io
 from typing import Dict, List, Tuple, Optional
 import logging
+from column_mapper import column_mapper
 
 logger = logging.getLogger(__name__)
 
-def csv_to_polars(csv_content: str, required_columns: List[str] = None) -> pl.DataFrame:
+def csv_to_polars(csv_content: str, required_columns: List[str] = None, auto_map: bool = False) -> pl.DataFrame:
     """
-    Convertit le contenu CSV en DataFrame Polars avec validation
+    Convertit le contenu CSV en DataFrame Polars.
+    Par défaut, ne fait PAS de mapping des colonnes (conserve les colonnes originales).
+    
+    Args:
+        csv_content: Contenu du fichier CSV
+        required_columns: Colonnes requises (optionnel)
+        auto_map: Si True, applique le mapping automatique (DEPRECATED - ne pas utiliser)
+    
+    Returns:
+        DataFrame Polars avec colonnes originales
     """
     try:
-        # Lecture avec Polars
-        df = pl.read_csv(io.StringIO(csv_content))
+        # Lecture avec Polars, en ignorant les lignes de commentaires
+        lines = csv_content.strip().split('\n')
+        
+        # Filtrer les lignes de commentaires (commencent par #)
+        data_lines = [line for line in lines if not line.strip().startswith('#')]
+        clean_csv = '\n'.join(data_lines)
+        
+        df = pl.read_csv(io.StringIO(clean_csv))
         
         # Validation des colonnes requises si spécifiées
         if required_columns:
@@ -25,15 +42,16 @@ def csv_to_polars(csv_content: str, required_columns: List[str] = None) -> pl.Da
                 raise ValueError(f"Colonnes manquantes: {missing_columns}")
         
         logger.info(f"DataFrame créé: {df.shape[0]} lignes, {df.shape[1]} colonnes")
+        
         return df
         
     except Exception as e:
         logger.error(f"Erreur lors de la conversion CSV: {e}")
         raise
 
-def validate_exoplanet_data(df: pl.DataFrame, for_training: bool = False) -> Dict[str, any]:
+def validate_exoplanet_data(df: pl.DataFrame, for_training: bool = False, mapping_info: Dict = None) -> Dict[str, any]:
     """
-    Valide les données d'exoplanètes
+    Valide les données d'exoplanètes avec support des colonnes standardisées
     """
     validation_result = {
         'is_valid': True,
@@ -42,15 +60,16 @@ def validate_exoplanet_data(df: pl.DataFrame, for_training: bool = False) -> Dic
         'info': {
             'rows': df.shape[0],
             'columns': df.shape[1],
-            'column_names': df.columns
+            'column_names': df.columns,
+            'format': mapping_info.get('format', 'unknown') if mapping_info else 'unknown'
         }
     }
     
-    # Colonnes minimales requises pour les prédictions
-    min_required_cols = ['koi_period', 'koi_duration', 'koi_depth', 'koi_prad']
+    # Colonnes minimales requises pour les prédictions (format standardisé)
+    min_required_cols = ['orbital_period', 'transit_duration', 'transit_depth', 'planet_radius']
     
     # Colonnes supplémentaires pour l'entraînement
-    training_required_cols = min_required_cols + ['koi_disposition']
+    training_required_cols = min_required_cols + ['disposition']
     
     required_cols = training_required_cols if for_training else min_required_cols
     
@@ -76,10 +95,10 @@ def validate_exoplanet_data(df: pl.DataFrame, for_training: bool = False) -> Dic
             )
     
     # Vérification des valeurs de disposition pour l'entraînement
-    if for_training and 'koi_disposition' in df.columns:
+    if for_training and 'disposition' in df.columns:
         valid_dispositions = ['CONFIRMED', 'FALSE POSITIVE', 'CANDIDATE']
-        unique_dispositions = df['koi_disposition'].unique().to_list()
-        invalid_dispositions = [d for d in unique_dispositions if d not in valid_dispositions]
+        unique_dispositions = df['disposition'].unique().to_list()
+        invalid_dispositions = [d for d in unique_dispositions if d not in valid_dispositions and d is not None]
         
         if invalid_dispositions:
             validation_result['errors'].append(
@@ -88,11 +107,15 @@ def validate_exoplanet_data(df: pl.DataFrame, for_training: bool = False) -> Dic
             )
         
         # Distribution des classes
-        disposition_counts = df['koi_disposition'].value_counts().sort('koi_disposition')
+        disposition_counts = df['disposition'].value_counts().sort('disposition')
         validation_result['info']['class_distribution'] = {
-            row['koi_disposition']: row['count'] 
+            row['disposition']: row['count'] 
             for row in disposition_counts.iter_rows(named=True)
         }
+    
+    # Informations sur le mapping
+    if mapping_info:
+        validation_result['info']['mapping_info'] = mapping_info
     
     return validation_result
 

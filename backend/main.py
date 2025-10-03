@@ -17,6 +17,7 @@ import math
 from ml_pipeline import ml_pipeline
 from data_utils import csv_to_polars, validate_exoplanet_data, format_prediction_results
 from exoplanet_validator import exoplanet_validator
+from column_mapper import column_mapper
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ async def health_check():
 @app.get("/model/stats")
 async def get_model_stats():
     """Récupère les statistiques du modèle actuel"""
-    if ml_pipeline.is_trained():
+    if ml_pipeline.trained:
         return ml_pipeline.get_model_stats()
     else:
         # Stats par défaut si le modèle n'est pas chargé
@@ -123,7 +124,7 @@ async def predict_exoplanet(file: UploadFile = File(...)):
     """
     try:
         # Vérification que le modèle est chargé
-        if not ml_pipeline.is_trained():
+        if not ml_pipeline.trained:
             raise HTTPException(
                 status_code=503,
                 detail="Aucun modèle entraîné disponible. Veuillez d'abord entraîner un modèle sur un dataset avec des labels."
@@ -135,7 +136,7 @@ async def predict_exoplanet(file: UploadFile = File(...)):
         
         # Conversion en DataFrame Polars avec validation
         try:
-            df = csv_to_polars(csv_content)
+            df, mapping_info = csv_to_polars(csv_content, auto_map=True)
         except Exception as e:
             raise HTTPException(
                 status_code=400,
@@ -143,7 +144,7 @@ async def predict_exoplanet(file: UploadFile = File(...)):
             )
         
         # Validation des données
-        validation = validate_exoplanet_data(df, for_training=False)
+        validation = validate_exoplanet_data(df, for_training=False, mapping_info=mapping_info)
         if not validation['is_valid']:
             raise HTTPException(
                 status_code=400,
@@ -181,7 +182,7 @@ async def retrain_model(
         
         # Conversion en DataFrame Polars
         try:
-            df = csv_to_polars(csv_content)
+            df, mapping_info = csv_to_polars(csv_content, auto_map=True)
         except Exception as e:
             raise HTTPException(
                 status_code=400,
@@ -189,7 +190,7 @@ async def retrain_model(
             )
         
         # Validation des données d'entraînement
-        validation = validate_exoplanet_data(df, for_training=True)
+        validation = validate_exoplanet_data(df, for_training=True, mapping_info=mapping_info)
         if not validation['is_valid']:
             raise HTTPException(
                 status_code=400,
@@ -273,7 +274,7 @@ async def analyze_single_target(data: Dict[str, float]):
     """
     try:
         # Vérification que le modèle est chargé
-        if not ml_pipeline.is_trained():
+        if not ml_pipeline.trained:
             raise HTTPException(
                 status_code=503,
                 detail="Aucun modèle entraîné disponible. Veuillez d'abord entraîner un modèle sur un dataset avec des labels."
@@ -318,63 +319,76 @@ async def analyze_single_target(data: Dict[str, float]):
 @app.post("/datasets/upload")
 async def upload_dataset(file: UploadFile = File(...)):
     """
-    Upload et sauvegarde d'un dataset
+    Upload et validation d'un dataset (Kepler, TESS ou K2).
+    Conserve TOUTES les colonnes originales.
     """
     try:
         # Lecture du fichier
         contents = await file.read()
         csv_content = contents.decode('utf-8')
         
-        # Validation du CSV
+        # Lecture du CSV avec Polars (SANS mapping)
         try:
-            df = csv_to_polars(csv_content)
+            df = csv_to_polars(csv_content, auto_map=False)
         except Exception as e:
             raise HTTPException(
                 status_code=400,
                 detail=f"Erreur lors de la lecture du CSV: {str(e)}"
             )
         
-        # Validation des données
-        validation = validate_exoplanet_data(df, for_training='koi_disposition' in df.columns)
+        # Validation et détection du format
+        df_processed, validation_info = column_mapper.process_dataframe(df)
         
-        # Génération d'un ID unique pour le dataset
+        if not validation_info['is_valid']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Dataset invalide: {', '.join(validation_info['errors'])}"
+            )
+        
+        # Génération d'un ID unique
         import uuid
         dataset_id = str(uuid.uuid4())[:8]
         
-        # Sauvegarde du fichier
-        dataset_dir = f"data/datasets/{dataset_id}"
-        os.makedirs(dataset_dir, exist_ok=True)
+        # Sauvegarde du dataset (avec TOUTES les colonnes originales)
+        dataset_path = f"data/{dataset_id}.csv"
+        df_processed.write_csv(dataset_path)
         
-        dataset_path = f"{dataset_dir}/{file.filename}"
-        with open(dataset_path, 'w', encoding='utf-8') as f:
-            f.write(csv_content)
-        
-        # Métadonnées du dataset
+        # Métadonnées
         metadata = {
             'id': dataset_id,
             'filename': file.filename,
             'upload_date': datetime.now().isoformat(),
-            'rows': df.shape[0],
-            'columns': df.shape[1],
-            'has_labels': 'koi_disposition' in df.columns,
-            'validation': validation,
+            'format': validation_info['format'],
+            'format_name': validation_info['format_name'],
+            'rows': validation_info['total_rows'],
+            'columns': validation_info['total_columns'],
+            'has_labels': validation_info['has_labels'],
+            'label_column': validation_info['label_column'],
+            'label_distribution': validation_info['label_distribution'],
+            'planet_name_column': validation_info['planet_name_column'],
+            'numeric_columns': validation_info['numeric_columns'],
+            'documentation': validation_info['documentation'],
+            'expected_labels': validation_info['expected_labels'],
             'path': dataset_path
         }
         
         # Sauvegarde des métadonnées
-        import json
-        with open(f"{dataset_dir}/metadata.json", 'w') as f:
-            json.dump(metadata, f, indent=2)
+        metadata_path = f"data/{dataset_id}_metadata.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(clean_for_json(metadata), f, indent=2)
+        
+        logger.info(f"Dataset uploadé: {dataset_id} ({validation_info['format_name']})")
         
         return {
             'dataset_id': dataset_id,
-            'message': 'Dataset uploadé avec succès',
-            'metadata': metadata
+            'message': f"Dataset {validation_info['format_name']} uploadé avec succès",
+            'metadata': clean_for_json(metadata)
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Erreur upload: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'upload: {str(e)}")
 
 @app.get("/datasets")
@@ -384,22 +398,28 @@ async def list_datasets():
     """
     try:
         datasets = []
-        datasets_dir = "data/datasets"
+        data_dir = "data"
         
-        if os.path.exists(datasets_dir):
-            for dataset_id in os.listdir(datasets_dir):
-                metadata_path = f"{datasets_dir}/{dataset_id}/metadata.json"
-                if os.path.exists(metadata_path):
-                    with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
-                    datasets.append(metadata)
+        if os.path.exists(data_dir):
+            # Lister tous les fichiers *_metadata.json
+            for filename in os.listdir(data_dir):
+                if filename.endswith('_metadata.json'):
+                    metadata_path = os.path.join(data_dir, filename)
+                    try:
+                        with open(metadata_path, 'r') as f:
+                            metadata = json.load(f)
+                        datasets.append(metadata)
+                    except Exception as e:
+                        logger.warning(f"Erreur lecture metadata {filename}: {e}")
+                        continue
         
         # Trier par date d'upload (plus récent en premier)
-        datasets.sort(key=lambda x: x['upload_date'], reverse=True)
+        datasets.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
         
         return {'datasets': datasets}
         
     except Exception as e:
+        logger.error(f"Erreur liste datasets: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des datasets: {str(e)}")
 
 @app.delete("/datasets/{dataset_id}")
@@ -408,13 +428,29 @@ async def delete_dataset(dataset_id: str):
     Supprime un dataset
     """
     try:
-        dataset_dir = f"data/datasets/{dataset_id}"
+        # Supprimer le fichier CSV
+        csv_path = f"data/{dataset_id}.csv"
+        metadata_path = f"data/{dataset_id}_metadata.json"
+        training_path = f"data/{dataset_id}_training.json"
         
-        if not os.path.exists(dataset_dir):
+        files_deleted = []
+        
+        if os.path.exists(csv_path):
+            os.remove(csv_path)
+            files_deleted.append("CSV")
+        
+        if os.path.exists(metadata_path):
+            os.remove(metadata_path)
+            files_deleted.append("metadata")
+        
+        if os.path.exists(training_path):
+            os.remove(training_path)
+            files_deleted.append("training")
+        
+        if not files_deleted:
             raise HTTPException(status_code=404, detail="Dataset non trouvé")
         
-        import shutil
-        shutil.rmtree(dataset_dir)
+        logger.info(f"Dataset {dataset_id} supprimé: {', '.join(files_deleted)}")
         
         return {'message': f'Dataset {dataset_id} supprimé avec succès'}
         
@@ -426,19 +462,18 @@ async def delete_dataset(dataset_id: str):
 @app.post("/datasets/{dataset_id}/analyze")
 async def analyze_dataset(dataset_id: str):
     """
-    Analyse un dataset spécifique
+    Analyse un dataset avec le modèle entraîné
     """
     try:
-        # Vérification que le modèle est chargé
-        if not ml_pipeline.is_trained():
+        # Vérification que le modèle est entraîné
+        if not ml_pipeline.trained:
             raise HTTPException(
                 status_code=503,
                 detail="Aucun modèle entraîné disponible. Veuillez d'abord entraîner un modèle sur un dataset avec des labels."
             )
         
-        # Chargement du dataset
-        dataset_dir = f"data/datasets/{dataset_id}"
-        metadata_path = f"{dataset_dir}/metadata.json"
+        # Chargement des métadonnées
+        metadata_path = f"data/{dataset_id}_metadata.json"
         
         if not os.path.exists(metadata_path):
             raise HTTPException(status_code=404, detail="Dataset non trouvé")
@@ -447,20 +482,35 @@ async def analyze_dataset(dataset_id: str):
             metadata = json.load(f)
         
         # Lecture du fichier CSV
-        with open(metadata['path'], 'r', encoding='utf-8') as f:
-            csv_content = f.read()
+        df = pl.read_csv(metadata['path'])
         
-        df = csv_to_polars(csv_content)
+        logger.info(f"Analyse du dataset {dataset_id} - {df.shape[0]} objets")
         
         # Prédictions
         predictions = ml_pipeline.predict(df)
-        result = format_prediction_results(predictions, df.shape[0])
+        
+        # Organiser les résultats par classe prédite
+        results_by_class = {}
+        for pred in predictions:
+            predicted_label = pred['predicted_label']
+            if predicted_label not in results_by_class:
+                results_by_class[predicted_label] = []
+            results_by_class[predicted_label].append(pred)
+        
+        result = {
+            'dataset_id': dataset_id,
+            'total_analyzed': len(predictions),
+            'predictions_by_class': {label: len(preds) for label, preds in results_by_class.items()},
+            'predictions': predictions[:100],  # Limiter à 100 pour la performance
+            'all_predictions_count': len(predictions)
+        }
         
         # Sauvegarde des résultats d'analyse
-        analysis_path = f"{dataset_dir}/analysis_results.json"
+        analysis_path = f"data/{dataset_id}_analysis.json"
         analysis_data = {
             'analysis_date': datetime.now().isoformat(),
-            'results': clean_for_json(result)
+            'dataset_id': dataset_id,
+            'results': result
         }
         
         with open(analysis_path, 'w') as f:
@@ -476,15 +526,15 @@ async def analyze_dataset(dataset_id: str):
 @app.post("/datasets/{dataset_id}/train")
 async def train_on_dataset(dataset_id: str, config: str = Form(...)):
     """
-    Entraîne le modèle sur un dataset spécifique
+    Entraîne le modèle sur un dataset spécifique (Kepler, TESS ou K2).
+    Utilise automatiquement TOUTES les colonnes numériques du dataset.
     """
     try:
         # Parse de la configuration
         training_config = TrainingConfig(**json.loads(config))
         
-        # Chargement du dataset
-        dataset_dir = f"data/datasets/{dataset_id}"
-        metadata_path = f"{dataset_dir}/metadata.json"
+        # Chargement des métadonnées
+        metadata_path = f"data/{dataset_id}_metadata.json"
         
         if not os.path.exists(metadata_path):
             raise HTTPException(status_code=404, detail="Dataset non trouvé")
@@ -496,45 +546,54 @@ async def train_on_dataset(dataset_id: str, config: str = Form(...)):
         if not metadata.get('has_labels', False):
             raise HTTPException(
                 status_code=400,
-                detail="Ce dataset ne contient pas de labels (colonne koi_disposition) nécessaires pour l'entraînement"
+                detail=f"Ce dataset ne contient pas de colonne de label ({metadata.get('label_column', 'disposition')}) nécessaire pour l'entraînement"
             )
         
-        # Lecture du fichier CSV
-        with open(metadata['path'], 'r', encoding='utf-8') as f:
-            csv_content = f.read()
+        # Chargement du dataset
+        df = pl.read_csv(metadata['path'])
         
-        df = csv_to_polars(csv_content)
+        logger.info(f"Entraînement sur {metadata['format_name']} - {df.shape[0]} lignes, {df.shape[1]} colonnes")
+        logger.info(f"Colonne de label: {metadata['label_column']}")
         
-        # Réentraînement
+        # Entraînement avec le nouveau pipeline
         training_results = ml_pipeline.train_model(
             df,
-            algorithm=training_config.algorithm,
+            label_column=metadata['label_column'],
+            planet_name_column=metadata['planet_name_column'],
+            format_type=metadata['format'],
             test_size=training_config.test_size,
             random_state=training_config.random_state,
             hyperparameters=training_config.hyperparameters
         )
         
-        # Sauvegarde du nouveau modèle
-        model_path = "models/exoplanet_model.pkl"
-        ml_pipeline.save_model(model_path)
+        # Sauvegarde du modèle
+        ml_pipeline.save_model("models")
         
         # Sauvegarde des résultats d'entraînement
-        training_path = f"{dataset_dir}/training_results.json"
+        training_path = f"data/{dataset_id}_training.json"
         training_data = {
             'training_date': datetime.now().isoformat(),
+            'dataset_id': dataset_id,
+            'format': metadata['format'],
             'config': training_config.dict(),
-            'results': clean_for_json(training_results)
+            'results': training_results
         }
         
         with open(training_path, 'w') as f:
-            json.dump(training_data, f, indent=2)
+            json.dump(clean_for_json(training_data), f, indent=2)
+        
+        logger.info(f"Modèle entraîné - Accuracy: {training_results['accuracy']:.4f}")
         
         result = {
-            "message": "Modèle entraîné avec succès sur le dataset",
+            "message": f"Modèle entraîné avec succès sur {metadata['format_name']}",
             "dataset_id": dataset_id,
-            "new_stats": training_results['model_stats'],
-            "training_config": training_config,
-            "samples_used": training_results['samples_used']
+            "format": metadata['format'],
+            "accuracy": training_results['accuracy'],
+            "n_features": training_results['n_features'],
+            "n_classes": training_results['n_classes'],
+            "label_names": training_results['label_names'],
+            "top_features": list(training_results['feature_importance'].keys())[:10],
+            "training_config": training_config.dict()
         }
         
         return clean_for_json(result)
@@ -542,6 +601,7 @@ async def train_on_dataset(dataset_id: str, config: str = Form(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Erreur entraînement: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'entraînement: {str(e)}")
 
 @app.get("/datasets/{dataset_id}/explore")
@@ -550,8 +610,7 @@ async def explore_dataset(dataset_id: str):
     Récupère les données détaillées d'un dataset pour exploration
     """
     try:
-        dataset_dir = f"data/datasets/{dataset_id}"
-        metadata_path = f"{dataset_dir}/metadata.json"
+        metadata_path = f"data/{dataset_id}_metadata.json"
         
         if not os.path.exists(metadata_path):
             raise HTTPException(status_code=404, detail="Dataset non trouvé")
@@ -560,10 +619,7 @@ async def explore_dataset(dataset_id: str):
             metadata = json.load(f)
         
         # Lecture du fichier CSV
-        with open(metadata['path'], 'r', encoding='utf-8') as f:
-            csv_content = f.read()
-        
-        df = csv_to_polars(csv_content)
+        df = pl.read_csv(metadata['path'])
         
         # Statistiques descriptives
         numeric_cols = [col for col in df.columns if df[col].dtype in [pl.Float64, pl.Float32, pl.Int64, pl.Int32]]
@@ -645,8 +701,8 @@ async def upload_for_validation(file: UploadFile = File(...)):
         contents = await file.read()
         csv_content = contents.decode('utf-8')
         
-        # Conversion en DataFrame
-        df = csv_to_polars(csv_content)
+        # Conversion en DataFrame avec mapping automatique
+        df, mapping_info = csv_to_polars(csv_content, auto_map=True)
         
         # Validation spécialisée pour les exoplanètes
         validation = exoplanet_validator.validate_dataset(df)
@@ -705,16 +761,8 @@ async def validate_exoplanets(dataset_id: str):
     Fonctionne avec les datasets uploadés via /datasets/upload ou /validate/upload
     """
     try:
-        # Vérification que le modèle est entraîné
-        if not ml_pipeline.is_trained():
-            raise HTTPException(
-                status_code=503,
-                detail="Aucun modèle entraîné disponible. Veuillez d'abord entraîner un modèle sur un dataset avec des planètes CONFIRMED."
-            )
-        
         # Chargement du dataset
-        dataset_dir = f"data/datasets/{dataset_id}"
-        metadata_path = f"{dataset_dir}/metadata.json"
+        metadata_path = f"data/{dataset_id}_metadata.json"
         
         if not os.path.exists(metadata_path):
             raise HTTPException(status_code=404, detail="Dataset non trouvé")
@@ -723,10 +771,19 @@ async def validate_exoplanets(dataset_id: str):
             metadata = json.load(f)
         
         # Lecture du CSV
-        with open(metadata['path'], 'r', encoding='utf-8') as f:
-            csv_content = f.read()
+        df = pl.read_csv(metadata['path'])
         
-        df = csv_to_polars(csv_content)
+        # Charger le modèle correspondant au format du dataset
+        dataset_format = metadata.get('format', 'unknown')
+        logger.info(f"Validation du dataset {dataset_id} (format: {dataset_format}) - {df.shape[0]} objets")
+        
+        # Essayer de charger le modèle pour ce format
+        model_loaded = ml_pipeline.load_model(format_type=dataset_format)
+        if not model_loaded:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Aucun modèle entraîné pour le format {dataset_format}. Veuillez d'abord entraîner un modèle sur un dataset {dataset_format}."
+            )
         
         # Validation du dataset pour la validation d'exoplanètes
         validation = exoplanet_validator.validate_dataset(df)
@@ -744,7 +801,7 @@ async def validate_exoplanets(dataset_id: str):
         results['dataset_name'] = metadata.get('filename', 'Dataset')
         
         # Sauvegarde des résultats
-        validation_path = f"{dataset_dir}/validation_results.json"
+        validation_path = f"data/{dataset_id}_validation.json"
         validation_data = {
             'validation_date': datetime.now().isoformat(),
             'results': clean_for_json(results)
@@ -752,6 +809,8 @@ async def validate_exoplanets(dataset_id: str):
         
         with open(validation_path, 'w') as f:
             json.dump(validation_data, f, indent=2)
+        
+        logger.info(f"Validation terminée - {results['analysis_summary']['confirmed_count']} planètes confirmables")
         
         return clean_for_json(results)
         
@@ -780,7 +839,7 @@ async def get_planet_details(dataset_id: str, planet_name: str):
         with open(metadata['path'], 'r', encoding='utf-8') as f:
             csv_content = f.read()
         
-        df = csv_to_polars(csv_content)
+        df, mapping_info = csv_to_polars(csv_content, auto_map=True)
         
         # Récupération des détails de la planète
         details = exoplanet_validator.get_planet_details(df, planet_name)
@@ -791,6 +850,96 @@ async def get_planet_details(dataset_id: str, planet_name: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération: {str(e)}")
+
+@app.post("/analyze")
+async def analyze_full_workflow(file: UploadFile = File(...)):
+    """
+    Endpoint simplifié pour l'analyse complète automatique:
+    1. Upload + validation du CSV
+    2. Entraînement automatique du modèle
+    3. Validation automatique des planètes
+    4. Retour des résultats
+    
+    Ne stocke PAS les fichiers - traitement en mémoire uniquement
+    """
+    try:
+        # Étape 1: Lecture et validation du CSV
+        logger.info(f"📤 Analyse automatique - Upload: {file.filename}")
+        
+        contents = await file.read()
+        csv_content = contents.decode('utf-8')
+        
+        # Lecture avec Polars
+        df = csv_to_polars(csv_content, auto_map=False)
+        
+        # Validation et détection du format
+        df_processed, validation_info = column_mapper.process_dataframe(df)
+        
+        if not validation_info['is_valid']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV invalide: {'; '.join(validation_info['errors'])}"
+            )
+        
+        csv_info = {
+            'filename': file.filename,
+            'format': validation_info['format'],
+            'format_name': validation_info['format_name'],
+            'row_count': validation_info['total_rows'],
+            'column_count': validation_info['total_columns'],
+            'has_labels': validation_info['has_labels'],
+            'label_column': validation_info.get('label_column', '')
+        }
+        
+        logger.info(f"✅ CSV validé: {csv_info['format_name']} - {csv_info['row_count']} objets")
+        
+        # Vérifier qu'il y a des labels pour l'entraînement
+        if not csv_info['has_labels']:
+            raise HTTPException(
+                status_code=400,
+                detail="Le dataset ne contient pas de labels nécessaires pour l'entraînement"
+            )
+        
+        # Étape 2: Entraînement du modèle
+        logger.info(f"🧠 Entraînement du modèle {csv_info['format']}...")
+        
+        training_results = ml_pipeline.train_model(
+            df=df_processed,
+            label_column=validation_info['label_column'],
+            planet_name_column=validation_info['planet_name_column'],
+            format_type=validation_info['format'],
+            test_size=0.3,
+            random_state=42
+        )
+        
+        logger.info(f"✅ Modèle entraîné - Accuracy: {training_results['accuracy']:.4f}")
+        
+        # Étape 3: Validation des planètes
+        logger.info(f"🔍 Validation des exoplanètes...")
+        
+        validation_results = exoplanet_validator.predict_confirmations(df_processed)
+        
+        logger.info(f"✅ Validation terminée - {validation_results['analysis_summary']['confirmed_count']} planètes confirmables")
+        
+        # Construire la réponse finale
+        response = {
+            'csv_info': csv_info,
+            'training': {
+                'accuracy': training_results['accuracy'],
+                'n_features': training_results['n_features'],
+                'n_classes': training_results['n_classes'],
+                'classes': training_results['label_names']
+            },
+            'validation': validation_results
+        }
+        
+        return clean_for_json(response)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur analyse automatique: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
