@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-space-900 text-white min-h-screen;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-space-800/50 backdrop-blur-sm border border-space-700 rounded-xl p-6 shadow-2xl;
+  }
+  
+  .card-hover {
+    @apply card transition-all duration-300 hover:bg-space-800/70 hover:border-primary-500/50 hover:shadow-primary-500/20;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary-500/50;
+  }
+  
+  .btn-secondary {
+    @apply bg-space-700 hover:bg-space-600 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 border border-space-600 hover:border-primary-500;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 bg-space-800/50 border border-space-600 rounded-lg text-white placeholder-space-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200;
+  }
+  
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  
+  .glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  
+  .glow-strong {
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+  }
+}
+
+/* Animations personnalisées */
+@keyframes starfield {
+  0% { transform: translateY(0px) rotate(0deg); }
+  100% { transform: translateY(-100vh) rotate(360deg); }
+}
+
+.starfield {
+  animation: starfield 20s linear infinite;
+}
+
+/* Scrollbar personnalisée */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-space-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-space-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-space-500;
+}
+
+
+
