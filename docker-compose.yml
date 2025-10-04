@@ -6,11 +6,14 @@ services:
     environment:
       - PYTHONPATH=/app
       - CORS_ORIGINS=http://localhost:3000
+      - HOST_EXOMINER_PATH=${PWD}/backend/exominer_work  # Chemin sur l'hôte pour ExoMiner
     volumes:
       - ./backend:/app
       - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock  # Accès au socket Docker
+      - /var/run/docker.sock:/var/run/docker.sock  # Accès au Docker de l'hôte
+      - ./backend/exominer_work:/app/exominer_work  # Persister les jobs ExoMiner
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    privileged: true  # Nécessaire pour exécuter Docker depuis Docker
 
   frontend:
     build: ./frontend

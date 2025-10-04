@@ -1,239 +1,327 @@
 """
-Service ExoMiner pour l'intégration avec le pipeline NASA
-Utilise Docker pour exécuter le conteneur ExoMiner
+Service ExoMiner - Intégration avec l'API Backend
+Gère le lancement et l'analyse des résultats ExoMiner via Docker
 """
 
 import subprocess
 import os
-import tempfile
 import pandas as pd
-import json
-import logging
+import tempfile
 from datetime import datetime
-from typing import Dict, List, Optional, Any
-import asyncio
-import threading
-import time
+from typing import Dict, List, Any, Optional, Tuple
+import logging
+import uuid
+import json
+import shutil
 
 logger = logging.getLogger(__name__)
 
+# Configuration
+IMAGE_NAME = "ghcr.io/nasa/exominer:amd64"
+EXOMINER_WORK_DIR = "exominer_work"
+
 class ExoMinerService:
-    """Service d'intégration avec ExoMiner de la NASA"""
+    """Service pour gérer les analyses ExoMiner"""
     
-    def __init__(self):
-        self.image_name = "ghcr.io/nasa/exominer:amd64"
-        self.work_dir = "/tmp/exominer_work"
-        self.running_jobs = {}  # Stockage des jobs en cours
-        self.ensure_work_dir()
+    def __init__(self, work_dir: str = EXOMINER_WORK_DIR):
+        """
+        Initialise le service ExoMiner
+        
+        Args:
+            work_dir: Répertoire de travail pour les fichiers ExoMiner
+        """
+        self.work_dir = work_dir
+        self.inputs_dir = os.path.join(work_dir, "inputs")
+        self.outputs_dir = os.path.join(work_dir, "outputs")
+        self.results_dir = os.path.join(work_dir, "results")
+        
+        # Chemin sur l'hôte pour les volumes Docker (depuis variable d'environnement)
+        # Si on est dans un conteneur Docker, on a besoin du chemin de l'hôte
+        self.host_work_dir = os.environ.get('HOST_EXOMINER_PATH', os.path.abspath(work_dir))
+        logger.info(f"Chemin conteneur: {self.work_dir}")
+        logger.info(f"Chemin hôte: {self.host_work_dir}")
+        
+        # Créer les répertoires s'ils n'existent pas
+        for directory in [self.work_dir, self.inputs_dir, self.outputs_dir, self.results_dir]:
+            os.makedirs(directory, exist_ok=True)
+        
+        logger.info(f"ExoMinerService initialisé - Répertoire: {self.work_dir}")
     
-    def ensure_work_dir(self):
-        """Crée le répertoire de travail"""
-        os.makedirs(self.work_dir, exist_ok=True)
-        logger.info(f"Répertoire de travail ExoMiner: {self.work_dir}")
-    
-    def check_docker_and_image(self):
-        """Vérifie que Docker et l'image ExoMiner sont disponibles"""
+    def check_docker(self) -> Tuple[bool, str]:
+        """
+        Vérifie que Docker est disponible
+        
+        Returns:
+            Tuple (disponible, message)
+        """
         try:
-            # Vérifier Docker
-            result = subprocess.run(["docker", "--version"], capture_output=True, text=True, check=True)
-            logger.info(f"Docker disponible: {result.stdout.strip()}")
-            
-            # Vérifier l'image ExoMiner
             result = subprocess.run(
-                ["docker", "images", "-q", self.image_name],
-                capture_output=True, text=True, check=True
+                ["docker", "--version"], 
+                capture_output=True, 
+                text=True,
+                timeout=5
+            )
+            version = result.stdout.strip()
+            logger.info(f"Docker disponible: {version}")
+            return True, version
+        except FileNotFoundError:
+            error_msg = "Docker n'est pas installé ou n'est pas dans le PATH"
+            logger.error(error_msg)
+            return False, error_msg
+        except subprocess.TimeoutExpired:
+            error_msg = "Timeout lors de la vérification de Docker"
+            logger.error(error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Erreur lors de la vérification de Docker: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+    
+    def check_image(self) -> Tuple[bool, str]:
+        """
+        Vérifie que l'image ExoMiner est disponible
+        
+        Returns:
+            Tuple (disponible, message)
+        """
+        try:
+            result = subprocess.run(
+                ["docker", "images", "-q", IMAGE_NAME],
+                capture_output=True,
+                text=True,
+                timeout=10
             )
             
             if not result.stdout.strip():
-                logger.info("Téléchargement de l'image ExoMiner...")
-                subprocess.run(["docker", "pull", self.image_name], check=True)
-                logger.info("Image ExoMiner téléchargée")
-            else:
-                logger.info("Image ExoMiner disponible")
+                logger.info("Image ExoMiner non présente, téléchargement nécessaire")
+                return False, "Image ExoMiner non présente, téléchargement nécessaire"
             
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Erreur Docker/Image: {e}")
-            return False
-        except FileNotFoundError:
-            logger.error("Docker non trouvé!")
-            return False
+            logger.info("Image ExoMiner disponible")
+            return True, "Image ExoMiner disponible"
+            
+        except Exception as e:
+            error_msg = f"Erreur lors de la vérification de l'image: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
     
-    async def analyze_tics_csv(self, 
-                              csv_content: str,
-                              filename: str,
-                              data_collection_mode: str = "2min",
-                              num_processes: int = 2,
-                              num_jobs: int = 1,
-                              download_spoc_data_products: bool = True,
-                              stellar_parameters_source: str = "ticv8",
-                              ruwe_source: str = "gaiadr2",
-                              exominer_model: str = "exominer++_single") -> Dict[str, Any]:
+    def pull_image(self) -> Tuple[bool, str]:
         """
-        Analyse un fichier CSV de TIC IDs avec ExoMiner
+        Télécharge l'image ExoMiner
+        
+        Returns:
+            Tuple (succès, message)
+        """
+        try:
+            logger.info("Téléchargement de l'image ExoMiner...")
+            result = subprocess.run(
+                ["docker", "pull", IMAGE_NAME],
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minutes max
+            )
+            
+            if result.returncode == 0:
+                logger.info("Image ExoMiner téléchargée avec succès")
+                return True, "Image téléchargée avec succès"
+            else:
+                error_msg = f"Échec du téléchargement: {result.stderr}"
+                logger.error(error_msg)
+                return False, error_msg
+                
+        except subprocess.TimeoutExpired:
+            error_msg = "Timeout lors du téléchargement de l'image (>10 minutes)"
+            logger.error(error_msg)
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Erreur lors du téléchargement: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+    
+    def validate_tics_csv(self, csv_path: str) -> Tuple[bool, str, Optional[Dict]]:
+        """
+        Valide le fichier CSV des TIC IDs
+        
+        Args:
+            csv_path: Chemin vers le fichier CSV
+            
+        Returns:
+            Tuple (valide, message, informations)
+        """
+        try:
+            if not os.path.exists(csv_path):
+                return False, f"Fichier {csv_path} non trouvé", None
+            
+            df = pd.read_csv(csv_path)
+            
+            # Vérifier les colonnes requises
+            required = ['tic_id', 'sector_run']
+            missing = [col for col in required if col not in df.columns]
+            
+            if missing:
+                return False, f"Colonnes manquantes: {missing}", None
+            
+            # Informations
+            info = {
+                'total_tics': len(df),
+                'columns': list(df.columns),
+                'tic_ids': df['tic_id'].tolist()[:10],  # Premiers 10 TIC IDs
+                'sectors': df['sector_run'].unique().tolist()
+            }
+            
+            logger.info(f"CSV validé: {len(df)} TIC IDs")
+            return True, f"CSV valide: {len(df)} TIC IDs", info
+            
+        except Exception as e:
+            error_msg = f"Erreur lors de la validation du CSV: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg, None
+    
+    def create_analysis(self, csv_content: str, filename: str) -> Tuple[bool, str, Optional[str]]:
+        """
+        Crée une nouvelle analyse ExoMiner
         
         Args:
             csv_content: Contenu du fichier CSV
-            filename: Nom du fichier original
-            data_collection_mode: Mode de collecte de données
-            num_processes: Nombre de processus parallèles
-            num_jobs: Nombre de jobs
-            download_spoc_data_products: Télécharger les produits SPOC DV
-            stellar_parameters_source: Source des paramètres stellaires
-            ruwe_source: Source des valeurs RUWE Gaia
-            exominer_model: Modèle ExoMiner à utiliser
+            filename: Nom original du fichier
             
         Returns:
-            Dictionnaire avec les résultats de l'analyse
+            Tuple (succès, message, analysis_id)
         """
         try:
-            # Générer un ID de job unique
-            job_id = f"exominer_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            # Générer un ID unique pour l'analyse
+            analysis_id = f"exominer_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
             
-            # Créer le répertoire de sortie
-            output_dir = os.path.join(self.work_dir, job_id)
-            os.makedirs(output_dir, exist_ok=True)
+            # Créer le répertoire pour cette analyse
+            analysis_dir = os.path.join(self.outputs_dir, analysis_id)
+            os.makedirs(analysis_dir, exist_ok=True)
             
-            # Sauvegarder le CSV avec un nom spécifique
-            csv_path = os.path.join(output_dir, "tics_tbl.csv")
-            with open(csv_path, 'w', encoding='utf-8') as f:
+            # Sauvegarder le fichier CSV d'entrée
+            input_csv_path = os.path.join(self.inputs_dir, f"{analysis_id}_tics.csv")
+            with open(input_csv_path, 'w', encoding='utf-8') as f:
                 f.write(csv_content)
             
-            # Vérifier que le fichier a été créé correctement
-            if not os.path.isfile(csv_path):
-                raise ValueError(f"Le fichier CSV n'a pas été créé correctement: {csv_path}")
-            
-            # Vérifier le contenu du fichier comme dans exominer_run.py
-            try:
-                df_test = pd.read_csv(csv_path)
-                logger.info(f"Fichier CSV créé et validé: {csv_path} ({os.path.getsize(csv_path)} bytes)")
-                logger.info(f"Contenu CSV: {len(df_test)} lignes, colonnes: {list(df_test.columns)}")
-            except Exception as e:
-                logger.error(f"Erreur validation CSV: {e}")
-                raise ValueError(f"Le fichier CSV créé n'est pas valide: {e}")
-            
-            logger.info(f"Démarrage analyse ExoMiner - Job ID: {job_id}")
-            logger.info(f"Fichier CSV: {filename}")
-            logger.info(f"Répertoire de sortie: {output_dir}")
-            
             # Valider le CSV
-            validation_result = self.validate_csv_format(csv_path)
-            if not validation_result['valid']:
-                raise ValueError(f"CSV invalide: {validation_result['error']}")
+            is_valid, message, info = self.validate_tics_csv(input_csv_path)
+            if not is_valid:
+                return False, message, None
             
-            # Marquer le job comme démarré
-            self.running_jobs[job_id] = {
-                'status': 'running',
-                'start_time': datetime.now(),
-                'output_dir': output_dir,
+            # Créer les métadonnées de l'analyse
+            metadata = {
+                'analysis_id': analysis_id,
                 'filename': filename,
-                'progress': 0
+                'created_at': datetime.now().isoformat(),
+                'status': 'created',
+                'input_csv': input_csv_path,
+                'output_dir': analysis_dir,
+                'info': info
             }
             
-            # Exécuter ExoMiner en arrière-plan
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, 
-                self._run_exominer_container,
-                csv_path, output_dir, job_id, {
-                    'data_collection_mode': data_collection_mode,
-                    'num_processes': num_processes,
-                    'num_jobs': num_jobs,
-                    'download_spoc_data_products': download_spoc_data_products,
-                    'stellar_parameters_source': stellar_parameters_source,
-                    'ruwe_source': ruwe_source,
-                    'exominer_model': exominer_model
-                }
-            )
+            # Sauvegarder les métadonnées
+            metadata_path = os.path.join(self.results_dir, f"{analysis_id}_metadata.json")
+            with open(metadata_path, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2)
             
-            # Mettre à jour le statut
-            self.running_jobs[job_id]['status'] = 'completed' if result['success'] else 'failed'
-            self.running_jobs[job_id]['end_time'] = datetime.now()
-            self.running_jobs[job_id]['result'] = result
-            
-            return {
-                'job_id': job_id,
-                'success': result['success'],
-                'output_directory': output_dir,
-                'results': result,
-                'validation': validation_result
-            }
+            logger.info(f"Analyse créée: {analysis_id}")
+            return True, f"Analyse créée avec succès", analysis_id
             
         except Exception as e:
-            logger.error(f"Erreur analyse ExoMiner: {str(e)}")
-            if job_id in self.running_jobs:
-                self.running_jobs[job_id]['status'] = 'failed'
-                self.running_jobs[job_id]['error'] = str(e)
-            raise
+            error_msg = f"Erreur lors de la création de l'analyse: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg, None
     
-    def _run_exominer_container(self, csv_path: str, output_dir: str, job_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Exécute le conteneur ExoMiner (fonction synchrone)"""
+    def run_analysis(
+        self,
+        analysis_id: str,
+        data_collection_mode: str = "2min",
+        num_processes: int = 2,
+        num_jobs: int = 1,
+        model: str = "exominer++_single",
+        download_spoc_data_products: bool = True,
+        stellar_parameters_source: str = "ticv8",
+        ruwe_source: str = "gaiadr2"
+    ) -> Tuple[bool, str, List[str]]:
+        """
+        Lance l'analyse ExoMiner dans un conteneur Docker
+        
+        Args:
+            analysis_id: ID de l'analyse
+            data_collection_mode: Mode de collecte (2min, 20sec, fast, FFI, etc.)
+            num_processes: Nombre de processus parallèles
+            num_jobs: Nombre de jobs
+            model: Modèle ExoMiner à utiliser
+            download_spoc_data_products: Télécharger les produits SPOC
+            stellar_parameters_source: Source des paramètres stellaires
+            ruwe_source: Source RUWE
+            
+        Returns:
+            Tuple (succès, message, logs)
+        """
         try:
-            # Vérifier Docker et l'image ExoMiner
-            if not self.check_docker_and_image():
-                logger.error("Docker ou image ExoMiner non disponible")
-                return {
-                    'success': False,
-                    'error': 'Docker ou image ExoMiner non disponible',
-                    'return_code': -1
-                }
+            # Charger les métadonnées
+            metadata_path = os.path.join(self.results_dir, f"{analysis_id}_metadata.json")
+            if not os.path.exists(metadata_path):
+                return False, f"Analyse {analysis_id} non trouvée", []
             
-            # Vérifier que les fichiers existent avant de construire la commande
-            if not os.path.isfile(csv_path):
-                logger.error(f"Fichier CSV non trouvé: {csv_path}")
-                return {
-                    'success': False,
-                    'error': f'Fichier CSV non trouvé: {csv_path}',
-                    'return_code': -1
-                }
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
             
-            if not os.path.isdir(output_dir):
-                logger.error(f"Répertoire de sortie non trouvé: {output_dir}")
-                return {
-                    'success': False,
-                    'error': f'Répertoire de sortie non trouvé: {output_dir}',
-                    'return_code': -1
-                }
+            # Mettre à jour le statut
+            metadata['status'] = 'running'
+            metadata['started_at'] = datetime.now().isoformat()
+            metadata['progress'] = 0
+            metadata['params'] = {
+                'data_collection_mode': data_collection_mode,
+                'num_processes': num_processes,
+                'num_jobs': num_jobs,
+                'model': model
+            }
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
             
-            # Construire la commande Docker - utiliser la même approche que exominer_run.py qui fonctionne
-            csv_abs_path = os.path.abspath(csv_path)
-            output_abs_dir = os.path.abspath(output_dir)
+            # Chemins dans le conteneur backend
+            input_csv = metadata['input_csv']
+            output_dir = metadata['output_dir']
             
-            logger.info(f"CSV absolute path: {csv_abs_path}")
-            logger.info(f"Output absolute dir: {output_abs_dir}")
+            # Convertir les chemins du conteneur en chemins de l'hôte
+            # Le backend tourne dans /app, mais ExoMiner a besoin du chemin sur l'hôte
+            input_csv_rel = os.path.relpath(input_csv, self.work_dir)
+            output_dir_rel = os.path.relpath(output_dir, self.work_dir)
             
-            # Vérifier que le fichier existe vraiment
-            if not os.path.isfile(csv_abs_path):
-                logger.error(f"Fichier CSV non trouvé: {csv_abs_path}")
-                return {
-                    'success': False,
-                    'error': f'Fichier CSV non trouvé: {csv_abs_path}',
-                    'return_code': -1
-                }
+            # Chemins sur l'hôte (pour les volumes Docker)
+            host_input_csv = os.path.join(self.host_work_dir, input_csv_rel)
+            host_output_dir = os.path.join(self.host_work_dir, output_dir_rel)
             
-            # Utiliser la même approche que exominer_run.py qui fonctionne
+            # Normaliser les chemins pour Windows (remplacer \ par /)
+            if os.name == 'nt':
+                host_input_csv = host_input_csv.replace('\\', '/')
+                host_output_dir = host_output_dir.replace('\\', '/')
+            
+            logger.info(f"Chemin input (conteneur): {input_csv}")
+            logger.info(f"Chemin input (hôte): {host_input_csv}")
+            logger.info(f"Chemin output (conteneur): {output_dir}")
+            logger.info(f"Chemin output (hôte): {host_output_dir}")
+            
+            # Commande Docker avec les chemins de l'hôte
             cmd = [
                 "docker", "run", "--rm",
-                "-v", f"{csv_abs_path}:/tics_tbl.csv:rw",  # Monter directement le fichier comme dans exominer_run.py
-                "-v", f"{output_abs_dir}:/outputs:rw",
-                self.image_name,
-                "--tic_ids_fp=/tics_tbl.csv",  # Chemin direct comme dans exominer_run.py
+                "-v", f"{host_input_csv}:/tics_tbl.csv:rw",
+                "-v", f"{host_output_dir}:/outputs:rw",
+                IMAGE_NAME,
+                "--tic_ids_fp=/tics_tbl.csv",
                 "--output_dir=/outputs",
-                f"--data_collection_mode={params['data_collection_mode']}",
-                f"--num_processes={params['num_processes']}",
-                f"--num_jobs={params['num_jobs']}",
-                f"--download_spoc_data_products={str(params['download_spoc_data_products']).lower()}",
-                f"--stellar_parameters_source={params['stellar_parameters_source']}",
-                f"--ruwe_source={params['ruwe_source']}",
-                f"--exominer_model={params['exominer_model']}"
+                f"--data_collection_mode={data_collection_mode}",
+                f"--num_processes={num_processes}",
+                f"--num_jobs={num_jobs}",
+                f"--download_spoc_data_products={'true' if download_spoc_data_products else 'false'}",
+                f"--stellar_parameters_source={stellar_parameters_source}",
+                f"--ruwe_source={ruwe_source}",
+                f"--exominer_model={model}"
             ]
             
-            logger.info(f"Commande ExoMiner pour job {job_id}: {' '.join(cmd)}")
+            logger.info(f"Lancement ExoMiner: {analysis_id}")
+            logger.info(f"Commande: {' '.join(cmd)}")
             
-            # Exécution avec timeout comme dans exominer_run.py
-            logger.info("Lancement ExoMiner...")
-            logger.info("ATTENTION: L'analyse peut prendre 5-15 minutes!")
-            
+            # Exécution avec logs et progression
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -242,217 +330,288 @@ class ExoMinerService:
                 bufsize=1
             )
             
-            # Suivi en temps réel et mise à jour du progrès
+            # Capturer les logs et estimer la progression
             output_lines = []
+            progress = 0
+            total_tics = metadata.get('info', {}).get('total_tics', 1)
+            
             while True:
                 output = process.stdout.readline()
                 if output == '' and process.poll() is not None:
                     break
                 if output:
                     line = output.strip()
-                    logger.info(f"[ExoMiner] {line}")
                     output_lines.append(line)
+                    logger.info(f"[ExoMiner] {line}")
                     
-                    # Mettre à jour le progrès basé sur les logs
-                    if "Getting data products" in line:
-                        self.running_jobs[job_id]['progress'] = min(50, self.running_jobs[job_id]['progress'] + 10)
-                    elif "Finished running ExoMiner pipeline" in line:
-                        self.running_jobs[job_id]['progress'] = 100
+                    # Estimation de la progression basée sur les logs
+                    if 'Processing TIC' in line or 'Analyzing' in line:
+                        progress = min(progress + (80 / total_tics), 80)
+                    elif 'Generating catalog' in line or 'Writing results' in line:
+                        progress = 90
+                    
+                    # Mettre à jour la progression toutes les 10 lignes
+                    if len(output_lines) % 10 == 0:
+                        metadata['progress'] = int(progress)
+                        with open(metadata_path, 'w') as f:
+                            json.dump(metadata, f, indent=2)
             
             return_code = process.wait()
-            logger.info(f"ExoMiner terminé avec code: {return_code}")
             
-            # Analyser les résultats
-            results = self.analyze_exominer_output(output_dir, output_lines, return_code)
+            # Calculer la durée
+            started_at = datetime.fromisoformat(metadata['started_at'])
+            duration_seconds = (datetime.now() - started_at).total_seconds()
             
-            return {
-                'success': return_code == 0,
-                'return_code': return_code,
-                'output_lines': output_lines,
-                'results': results
-            }
+            # Mettre à jour les métadonnées
+            metadata['status'] = 'completed' if return_code == 0 else 'failed'
+            metadata['completed_at'] = datetime.now().isoformat()
+            metadata['duration_seconds'] = duration_seconds
+            metadata['return_code'] = return_code
+            metadata['progress'] = 100 if return_code == 0 else progress
+            metadata['logs'] = output_lines[-50:]  # Garder les 50 dernières lignes
             
-        except subprocess.TimeoutExpired:
-            logger.error(f"Timeout ExoMiner pour job {job_id}")
-            return {
-                'success': False,
-                'error': 'Timeout - analyse trop longue',
-                'return_code': -1
-            }
-        except Exception as e:
-            logger.error(f"Erreur exécution ExoMiner job {job_id}: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'return_code': -1
-            }
-    
-    def validate_csv_format(self, csv_path: str) -> Dict[str, Any]:
-        """Valide le format du fichier CSV"""
-        try:
-            df = pd.read_csv(csv_path)
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
             
-            # Vérifier les colonnes requises
-            required_columns = ['tic_id', 'sector_run']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            
-            if missing_columns:
-                return {
-                    'valid': False,
-                    'error': f"Colonnes manquantes: {missing_columns}",
-                    'columns': list(df.columns),
-                    'row_count': len(df)
-                }
-            
-            return {
-                'valid': True,
-                'columns': list(df.columns),
-                'row_count': len(df),
-                'sample_data': df.head(5).to_dict('records') if len(df) > 0 else []
-            }
+            if return_code == 0:
+                logger.info(f"Analyse terminée avec succès: {analysis_id}")
+                return True, "Analyse terminée avec succès", output_lines
+            else:
+                logger.error(f"Analyse échouée: {analysis_id} (code: {return_code})")
+                return False, f"Analyse échouée (code: {return_code})", output_lines
             
         except Exception as e:
-            return {
-                'valid': False,
-                'error': f"Erreur lecture CSV: {str(e)}",
-                'columns': [],
-                'row_count': 0
-            }
+            error_msg = f"Erreur lors de l'exécution: {str(e)}"
+            logger.error(error_msg)
+            
+            # Mettre à jour le statut en erreur
+            try:
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                metadata['status'] = 'failed'
+                metadata['error'] = error_msg
+                with open(metadata_path, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+            except:
+                pass
+            
+            return False, error_msg, []
     
-    def analyze_exominer_output(self, output_dir: str, stdout_lines: list, return_code: int) -> Dict[str, Any]:
-        """Analyse les résultats d'ExoMiner"""
-        results = {
-            'success': return_code == 0,
-            'return_code': return_code,
-            'files_generated': [],
-            'exominer_catalog': None,
-            'summary': {},
-            'stdout': stdout_lines[-50:] if stdout_lines else []  # Dernières 50 lignes
-        }
+    def get_analysis_results(self, analysis_id: str) -> Tuple[bool, str, Optional[Dict]]:
+        """
+        Récupère les résultats d'une analyse avec format frontend
         
+        Args:
+            analysis_id: ID de l'analyse
+            
+        Returns:
+            Tuple (succès, message, résultats)
+        """
         try:
-            if not os.path.exists(output_dir):
-                logger.warning("Répertoire de sortie ExoMiner non trouvé")
-                return results
+            # Charger les métadonnées
+            metadata_path = os.path.join(self.results_dir, f"{analysis_id}_metadata.json")
+            if not os.path.exists(metadata_path):
+                return False, f"Analyse {analysis_id} non trouvée", None
             
-            # Lister les fichiers générés
-            all_files = []
-            for root, dirs, files in os.walk(output_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    file_size = os.path.getsize(file_path)
-                    all_files.append({
-                        'name': file,
-                        'path': file_path,
-                        'size_bytes': file_size,
-                        'size_mb': round(file_size / 1024 / 1024, 2),
-                        'relative_path': os.path.relpath(file_path, output_dir)
-                    })
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
             
-            results['files_generated'] = all_files
-            logger.info(f"ExoMiner généré {len(all_files)} fichiers")
+            # Vérifier le statut
+            if metadata['status'] not in ['completed', 'analyzing']:
+                return False, f"Analyse en statut: {metadata['status']}", metadata
             
-            # Identifier le catalogue principal ExoMiner (comme dans exominer_run.py)
-            catalog_files = [f for f in all_files if 'catalog' in f['name'].lower() and f['name'].endswith('.csv')]
+            # Lister les fichiers de sortie
+            output_dir = metadata['output_dir']
+            files = []
+            
+            if os.path.exists(output_dir):
+                for root, dirs, filenames in os.walk(output_dir):
+                    for filename in filenames:
+                        filepath = os.path.join(root, filename)
+                        size_mb = os.path.getsize(filepath) / 1024 / 1024
+                        files.append({
+                            'name': filename,
+                            'path': filepath,
+                            'size_mb': round(size_mb, 2)
+                        })
+            
+            # Chercher le catalogue de résultats
+            catalog_data = None
+            summary = {
+                'total_tics_processed': metadata.get('info', {}).get('total_tics', 0),
+                'high_confidence_candidates': 0,
+                'avg_score': None
+            }
+            
+            catalog_files = [f for f in files if 'catalog' in f['name'].lower() and f['name'].endswith('.csv')]
             
             if catalog_files:
                 catalog_file = catalog_files[0]
-                logger.info(f"Catalogue ExoMiner: {catalog_file['name']}")
-                
                 try:
                     df = pd.read_csv(catalog_file['path'])
                     
-                    results['exominer_catalog'] = {
-                        'file_name': catalog_file['name'],
-                        'file_size_mb': catalog_file['size_mb'],
+                    # Extraire les informations principales
+                    catalog_data = {
                         'total_objects': len(df),
+                        'unique_stars': df['tic_id'].nunique() if 'tic_id' in df.columns else 0,
                         'columns': list(df.columns),
-                        'sample_data': df.head(10).to_dict('records') if len(df) > 0 else []
+                        'sample_data': df.head(20).to_dict('records')
                     }
                     
-                    # Statistiques synthétiques (comme dans exominer_run.py)
-                    if len(df) > 0:
-                        stats = {
-                            'total_tics_processed': len(df),
-                            'total_tces_detected': len(df),
-                            'unique_tic_ids': df['tic_id'].nunique() if 'tic_id' in df.columns else 'unknown'
-                        }
-                        
-                        # Chercher scores ExoMiner (comme dans exominer_run.py)
-                        score_columns = [col for col in df.columns if 'score' in col.lower()]
-                        if score_columns and pd.api.types.is_numeric_dtype(df[score_columns[0]]):
-                            score_col = score_columns[0]
+                    # Scores ExoMiner si disponibles
+                    score_cols = [col for col in df.columns if 'score' in col.lower()]
+                    if score_cols:
+                        score_col = score_cols[0]
+                        if pd.api.types.is_numeric_dtype(df[score_col]):
                             high_conf = df[df[score_col] > 0.8]
-                            stats.update({
-                                'high_confidence_candidates': len(high_conf),
-                                'avg_score': round(df[score_col].mean(), 3),
-                                'max_score': round(df[score_col].max(), 3),
-                                'min_score': round(df[score_col].min(), 3)
-                            })
-                        
-                        results['summary'] = stats
-                        
-                        logger.info("Statistiques ExoMiner:")
-                        for key, value in stats.items():
-                            logger.info(f"  {key}: {value}")
+                            summary['high_confidence_candidates'] = len(high_conf)
+                            summary['avg_score'] = float(df[score_col].mean())
+                            catalog_data['high_confidence_candidates'] = len(high_conf)
+                            catalog_data['average_score'] = float(df[score_col].mean())
                     
                 except Exception as e:
-                    logger.warning(f"Erreur lecture catalogue ExoMiner: {e}")
+                    logger.warning(f"Erreur lecture catalogue: {e}")
             
-            # Chercher d'autres fichiers intéressants
-            spoc_files = [f for f in all_files if 'spoc' in f['name'].lower()]
-            log_files = [f for f in all_files if f['name'].endswith('.log')]
+            # Format attendu par le frontend
+            results = {
+                'job_id': analysis_id,
+                'status': metadata['status'],
+                'filename': metadata['filename'],
+                'created_at': metadata['created_at'],
+                'started_at': metadata.get('started_at'),
+                'completed_at': metadata.get('completed_at'),
+                'duration_seconds': metadata.get('duration_seconds', 0),
+                'progress': metadata.get('progress', 100),
+                'results': {
+                    'summary': summary,
+                    'exominer_catalog': catalog_data,
+                    'files': files,
+                    'total_files': len(files)
+                }
+            }
             
-            if spoc_files:
-                results['spoc_dv_reports'] = len(spoc_files)
-                logger.info(f"SPOC reports: {len(spoc_files)} fichiers")
-            
-            if log_files:
-                results['log_files'] = len(log_files)
-            
-            return results
+            return True, "Résultats récupérés", results
             
         except Exception as e:
-            logger.error(f"Erreur analyse résultats ExoMiner: {e}")
-            results['error'] = str(e)
-            return results
+            error_msg = f"Erreur lors de la récupération des résultats: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg, None
     
-    def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Récupère le statut d'un job ExoMiner"""
-        if job_id not in self.running_jobs:
+    def get_job_info(self, analysis_id: str) -> Optional[Dict]:
+        """
+        Récupère les informations basiques d'un job pour la liste
+        
+        Args:
+            analysis_id: ID de l'analyse
+            
+        Returns:
+            Dictionnaire avec les informations du job ou None
+        """
+        try:
+            metadata_path = os.path.join(self.results_dir, f"{analysis_id}_metadata.json")
+            if not os.path.exists(metadata_path):
+                return None
+            
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            
+            # Calculer la durée
+            duration = metadata.get('duration_seconds', 0)
+            if metadata['status'] == 'running' and metadata.get('started_at'):
+                try:
+                    started = datetime.fromisoformat(metadata['started_at'])
+                    duration = (datetime.now() - started).total_seconds()
+                except:
+                    pass
+            
+            return {
+                'job_id': analysis_id,
+                'filename': metadata['filename'],
+                'status': metadata['status'],
+                'created_at': metadata['created_at'],
+                'started_at': metadata.get('started_at'),
+                'completed_at': metadata.get('completed_at'),
+                'duration_seconds': duration,
+                'progress': metadata.get('progress', 0),
+                'info': metadata.get('info', {})
+            }
+        except Exception as e:
+            logger.error(f"Erreur get_job_info {analysis_id}: {e}")
             return None
-        
-        job = self.running_jobs[job_id].copy()
-        
-        # Calculer la durée
-        if 'start_time' in job:
-            if 'end_time' in job:
-                duration = (job['end_time'] - job['start_time']).total_seconds()
-            else:
-                duration = (datetime.now() - job['start_time']).total_seconds()
-            job['duration_seconds'] = round(duration, 2)
-        
-        return job
     
-    def list_jobs(self) -> Dict[str, Any]:
-        """Liste tous les jobs ExoMiner"""
-        return {
-            'total_jobs': len(self.running_jobs),
-            'jobs': {job_id: self.get_job_status(job_id) for job_id in self.running_jobs.keys()}
-        }
+    def list_analyses(self) -> List[Dict[str, Any]]:
+        """
+        Liste toutes les analyses ExoMiner
+        
+        Returns:
+            Liste des analyses avec leurs métadonnées
+        """
+        try:
+            analyses = []
+            
+            if os.path.exists(self.results_dir):
+                for filename in os.listdir(self.results_dir):
+                    if filename.endswith('_metadata.json'):
+                        metadata_path = os.path.join(self.results_dir, filename)
+                        try:
+                            with open(metadata_path, 'r') as f:
+                                metadata = json.load(f)
+                            analyses.append(metadata)
+                        except Exception as e:
+                            logger.warning(f"Erreur lecture metadata {filename}: {e}")
+            
+            # Trier par date de création (plus récent en premier)
+            analyses.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            
+            return analyses
+            
+        except Exception as e:
+            logger.error(f"Erreur liste analyses: {e}")
+            return []
     
-    def cleanup_old_jobs(self, max_age_hours: int = 24):
-        """Nettoie les anciens jobs"""
-        cutoff_time = datetime.now().timestamp() - (max_age_hours * 3600)
+    def delete_analysis(self, analysis_id: str) -> Tuple[bool, str]:
+        """
+        Supprime une analyse et ses fichiers
         
-        jobs_to_remove = []
-        for job_id, job in self.running_jobs.items():
-            if job.get('start_time', datetime.now()).timestamp() < cutoff_time:
-                jobs_to_remove.append(job_id)
-        
-        for job_id in jobs_to_remove:
-            del self.running_jobs[job_id]
-            logger.info(f"Job ExoMiner nettoyé: {job_id}")
+        Args:
+            analysis_id: ID de l'analyse
+            
+        Returns:
+            Tuple (succès, message)
+        """
+        try:
+            # Métadonnées
+            metadata_path = os.path.join(self.results_dir, f"{analysis_id}_metadata.json")
+            if not os.path.exists(metadata_path):
+                return False, f"Analyse {analysis_id} non trouvée"
+            
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            
+            # Supprimer les fichiers
+            files_deleted = []
+            
+            # Input CSV
+            if os.path.exists(metadata['input_csv']):
+                os.remove(metadata['input_csv'])
+                files_deleted.append('input_csv')
+            
+            # Output directory
+            if os.path.exists(metadata['output_dir']):
+                shutil.rmtree(metadata['output_dir'])
+                files_deleted.append('output_dir')
+            
+            # Metadata
+            os.remove(metadata_path)
+            files_deleted.append('metadata')
+            
+            logger.info(f"Analyse supprimée: {analysis_id}")
+            return True, f"Analyse supprimée: {', '.join(files_deleted)}"
+            
+        except Exception as e:
+            error_msg = f"Erreur lors de la suppression: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
 
-# Instance globale du service ExoMiner
+# Instance globale
 exominer_service = ExoMinerService()

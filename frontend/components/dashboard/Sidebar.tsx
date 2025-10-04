@@ -12,7 +12,7 @@ import {
   Home,
   Rocket,
   Cpu,
-  Eye
+  Satellite
 } from 'lucide-react';
 
 interface SidebarProps {}
@@ -29,18 +29,18 @@ const Sidebar: React.FC<SidebarProps> = () => {
       description: 'Détecter des exoplanètes'
     },
     {
+      id: 'exominer',
+      label: 'ExoMiner',
+      icon: Satellite,
+      href: '/dashboard/exominer',
+      description: 'Analyse NASA ExoMiner'
+    },
+    {
       id: 'models',
       label: 'Mes Modèles',
       icon: Cpu,
       href: '/dashboard/models',
       description: 'Gérer mes modèles'
-    },
-    {
-      id: 'exominer',
-      label: 'ExoMiner NASA', 
-      icon: Eye,
-      href: '/dashboard/exominer',
-      description: 'Pipeline NASA professionnel'
     }
   ];
 

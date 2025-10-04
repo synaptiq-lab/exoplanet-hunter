@@ -73,7 +73,7 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
   const loadJobs = useCallback(async () => {
     try {
       const response = await listExoMinerJobs();
-      setJobs(response.jobs);
+      setJobs(response.jobs as Record<string, ExoMinerJob>);
     } catch (err) {
       console.error('Erreur chargement jobs:', err);
     }
@@ -487,9 +487,9 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {jobResults.results.exominer_catalog.sample_data.slice(0, 5).map((row, idx) => (
+                        {jobResults.results.exominer_catalog?.sample_data.slice(0, 5).map((row, idx) => (
                           <tr key={idx} className="border-b border-space-700">
-                            {jobResults.results.exominer_catalog.columns.slice(0, 5).map((col) => (
+                            {jobResults.results.exominer_catalog?.columns.slice(0, 5).map((col) => (
                               <td key={col} className="py-2 text-space-300">
                                 {row[col]}
                               </td>

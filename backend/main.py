@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import pandas as pd
@@ -1156,12 +1156,113 @@ async def analyze_full_workflow(file: UploadFile = File(...)):
         logger.error(f"❌ Erreur analyse automatique: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
 
-# ============================================================================
-# ENDPOINTS EXOMINER NASA
-# ============================================================================
+# ================================
+# ENDPOINTS EXOMINER
+# ================================
+
+@app.get("/exominer/health")
+async def exominer_health():
+    """
+    Vérifie l'état du système ExoMiner (Docker, image, etc.)
+    """
+    try:
+        # Vérifier Docker
+        docker_available, docker_msg = exominer_service.check_docker()
+        
+        # Vérifier l'image ExoMiner
+        image_available, image_msg = exominer_service.check_image()
+        
+        return {
+            'docker': {
+                'available': docker_available,
+                'message': docker_msg
+            },
+            'exominer_image': {
+                'available': image_available,
+                'message': image_msg
+            },
+            'status': 'ready' if (docker_available and image_available) else 'not_ready'
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur vérification ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.post("/exominer/image/pull")
+async def exominer_pull_image():
+    """
+    Télécharge l'image Docker ExoMiner
+    """
+    try:
+        # Vérifier que Docker est disponible
+        docker_available, docker_msg = exominer_service.check_docker()
+        if not docker_available:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Docker non disponible: {docker_msg}"
+            )
+        
+        # Télécharger l'image
+        success, message = exominer_service.pull_image()
+        
+        if success:
+            return {
+                'success': True,
+                'message': message
+            }
+        else:
+            raise HTTPException(status_code=500, detail=message)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur téléchargement image: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.post("/exominer/upload")
+async def exominer_upload_tics(file: UploadFile = File(...)):
+    """
+    Upload un fichier CSV contenant les TIC IDs pour analyse ExoMiner
+    
+    Format CSV requis:
+    - tic_id: ID TIC de l'étoile (ex: 307210830)
+    - sector_run: Secteur TESS (ex: s0001-s0013)
+    """
+    try:
+        # Vérifier que l'extension est .csv
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400,
+                detail="Le fichier doit être au format CSV"
+            )
+        
+        # Lire le contenu
+        contents = await file.read()
+        csv_content = contents.decode('utf-8')
+        
+        # Créer l'analyse
+        success, message, analysis_id = exominer_service.create_analysis(
+            csv_content=csv_content,
+            filename=file.filename
+        )
+        
+        if success:
+            return {
+                'success': True,
+                'message': message,
+                'analysis_id': analysis_id
+            }
+        else:
+            raise HTTPException(status_code=400, detail=message)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur upload ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 @app.post("/exominer/analyze")
-async def analyze_with_exominer(
+async def exominer_analyze_workflow(
     file: UploadFile = File(...),
     data_collection_mode: str = Form("2min"),
     num_processes: int = Form(2),
@@ -1172,260 +1273,272 @@ async def analyze_with_exominer(
     exominer_model: str = Form("exominer++_single")
 ):
     """
-    Analyse un fichier CSV de TIC IDs avec ExoMiner de la NASA
+    Workflow complet ExoMiner: Upload + Run en une seule étape
     
     Args:
-        file: Fichier CSV contenant les TIC IDs et sector runs
-        data_collection_mode: Mode de collecte (2min ou FFI)
-        num_processes: Nombre de processus parallèles
-        num_jobs: Nombre de jobs
-        download_spoc_data_products: Télécharger les produits SPOC DV
-        stellar_parameters_source: Source des paramètres stellaires
-        ruwe_source: Source des valeurs RUWE Gaia
-        exominer_model: Modèle ExoMiner à utiliser
-    
-    Returns:
-        Résultats de l'analyse ExoMiner
+        file: Fichier CSV avec TIC IDs
+        Autres: Paramètres ExoMiner
     """
     try:
-        # Vérifier le type de fichier
+        # Vérifier Docker et l'image
+        docker_available, docker_msg = exominer_service.check_docker()
+        if not docker_available:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Docker non disponible: {docker_msg}"
+            )
+        
+        image_available, image_msg = exominer_service.check_image()
+        if not image_available:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Image ExoMiner non disponible. Utilisez /exominer/image/pull pour la télécharger."
+            )
+        
+        # Vérifier extension
         if not file.filename.endswith('.csv'):
-            raise HTTPException(status_code=400, detail="Le fichier doit être un CSV")
+            raise HTTPException(
+                status_code=400,
+                detail="Le fichier doit être au format CSV"
+            )
         
-        # Lire le contenu du fichier
-        csv_content = await file.read()
-        csv_content_str = csv_content.decode('utf-8')
+        # Lire et créer l'analyse
+        contents = await file.read()
+        csv_content = contents.decode('utf-8')
         
-        logger.info(f"🚀 Démarrage analyse ExoMiner pour {file.filename}")
+        success, message, analysis_id = exominer_service.create_analysis(
+            csv_content=csv_content,
+            filename=file.filename
+        )
         
-        # Lancer l'analyse ExoMiner
-        result = await exominer_service.analyze_tics_csv(
-            csv_content=csv_content_str,
-            filename=file.filename,
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        logger.info(f"🚀 Lancement analyse ExoMiner: {analysis_id}")
+        
+        # Lancer l'analyse immédiatement
+        success, message, logs = exominer_service.run_analysis(
+            analysis_id=analysis_id,
             data_collection_mode=data_collection_mode,
             num_processes=num_processes,
             num_jobs=num_jobs,
+            model=exominer_model,
             download_spoc_data_products=download_spoc_data_products,
             stellar_parameters_source=stellar_parameters_source,
-            ruwe_source=ruwe_source,
-            exominer_model=exominer_model
+            ruwe_source=ruwe_source
         )
         
-        logger.info(f"✅ Analyse ExoMiner terminée: {result['job_id']}")
-        
-        return clean_for_json({
-            'success': True,
-            'job_id': result['job_id'],
-            'message': 'Analyse ExoMiner lancée avec succès',
-            'validation': result['validation'],
-            'output_directory': result['output_directory'],
-            'results': result['results']
-        })
+        return {
+            'success': success,
+            'message': message,
+            'job_id': analysis_id,
+            'logs': logs[-20:] if logs else []
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Erreur analyse ExoMiner: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse ExoMiner: {str(e)}")
+        logger.error(f"Erreur workflow ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 @app.get("/exominer/jobs")
-async def list_exominer_jobs():
+async def exominer_list_jobs():
     """
-    Liste tous les jobs ExoMiner
-    
-    Returns:
-        Liste des jobs avec leur statut
+    Liste tous les jobs ExoMiner avec format attendu par le frontend
     """
     try:
-        jobs = exominer_service.list_jobs()
-        return clean_for_json(jobs)
+        analyses = exominer_service.list_analyses()
+        
+        # Convertir en format jobs avec informations détaillées
+        jobs = {}
+        for analysis in analyses:
+            job_info = exominer_service.get_job_info(analysis['analysis_id'])
+            if job_info:
+                jobs[job_info['job_id']] = job_info
+        
+        return {
+            'jobs': jobs,
+            'total': len(jobs)
+        }
+        
     except Exception as e:
-        logger.error(f"❌ Erreur liste jobs ExoMiner: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des jobs: {str(e)}")
-
-@app.get("/exominer/jobs/{job_id}")
-async def get_exominer_job_status(job_id: str):
-    """
-    Récupère le statut d'un job ExoMiner spécifique
-    
-    Args:
-        job_id: ID du job ExoMiner
-    
-    Returns:
-        Statut détaillé du job
-    """
-    try:
-        job_status = exominer_service.get_job_status(job_id)
-        
-        if job_status is None:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
-        
-        return clean_for_json(job_status)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Erreur statut job ExoMiner {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération du statut: {str(e)}")
+        logger.error(f"Erreur liste jobs: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 @app.get("/exominer/jobs/{job_id}/results")
-async def get_exominer_job_results(job_id: str):
+async def exominer_get_job_results(job_id: str):
     """
     Récupère les résultats détaillés d'un job ExoMiner
-    
-    Args:
-        job_id: ID du job ExoMiner
-    
-    Returns:
-        Résultats détaillés de l'analyse
     """
     try:
-        job_status = exominer_service.get_job_status(job_id)
+        success, message, results = exominer_service.get_analysis_results(job_id)
         
-        if job_status is None:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
-        
-        if job_status['status'] != 'completed':
-            raise HTTPException(status_code=400, detail=f"Job {job_id} pas encore terminé (statut: {job_status['status']})")
-        
-        # Récupérer les résultats détaillés
-        results = job_status.get('result', {})
-        
-        return clean_for_json({
-            'job_id': job_id,
-            'status': job_status['status'],
-            'duration_seconds': job_status.get('duration_seconds', 0),
-            'results': results.get('results', {}),
-            'success': results.get('success', False)
-        })
+        if success:
+            return clean_for_json(results)
+        else:
+            raise HTTPException(status_code=404, detail=message)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Erreur résultats job ExoMiner {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des résultats: {str(e)}")
+        logger.error(f"Erreur récupération résultats: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.get("/exominer/jobs/{job_id}/download")
-async def download_exominer_results(job_id: str):
+@app.get("/exominer/jobs/{job_id}/status")
+async def exominer_get_job_status(job_id: str):
     """
-    Télécharge les résultats d'un job ExoMiner sous forme de fichier ZIP
-    
-    Args:
-        job_id: ID du job ExoMiner
-    
-    Returns:
-        Fichier ZIP contenant tous les résultats
+    Récupère le statut d'un job ExoMiner
     """
     try:
-        job_status = exominer_service.get_job_status(job_id)
+        job_info = exominer_service.get_job_info(job_id)
         
-        if job_status is None:
+        if job_info:
+            return clean_for_json(job_info)
+        else:
             raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
         
-        if job_status['status'] != 'completed':
-            raise HTTPException(status_code=400, detail=f"Job {job_id} pas encore terminé")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur récupération statut: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.get("/exominer/jobs/{job_id}/download")
+async def exominer_download_results(job_id: str):
+    """
+    Télécharge tous les résultats d'un job en ZIP
+    """
+    try:
+        metadata_path = os.path.join(
+            exominer_service.results_dir,
+            f"{job_id}_metadata.json"
+        )
         
-        output_dir = job_status['output_directory']
+        if not os.path.exists(metadata_path):
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        
+        output_dir = metadata['output_dir']
         
         if not os.path.exists(output_dir):
-            raise HTTPException(status_code=404, detail="Répertoire de résultats non trouvé")
+            raise HTTPException(status_code=404, detail="Résultats non trouvés")
         
-        # Créer un fichier ZIP temporaire
+        # Créer un fichier ZIP des résultats
         import zipfile
-        import io
+        import tempfile
         
-        zip_buffer = io.BytesIO()
+        zip_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
         
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        with zipfile.ZipFile(zip_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(output_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    arc_name = os.path.relpath(file_path, output_dir)
-                    zip_file.write(file_path, arc_name)
+                    arcname = os.path.relpath(file_path, output_dir)
+                    zipf.write(file_path, arcname)
         
-        zip_buffer.seek(0)
+        from fastapi.responses import FileResponse
         
-        return Response(
-            content=zip_buffer.getvalue(),
-            media_type="application/zip",
-            headers={
-                "Content-Disposition": f"attachment; filename=exominer_results_{job_id}.zip"
-            }
+        return FileResponse(
+            path=zip_file.name,
+            filename=f"exominer_results_{job_id}.zip",
+            media_type="application/zip"
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Erreur téléchargement job ExoMiner {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors du téléchargement: {str(e)}")
+        logger.error(f"Erreur téléchargement résultats: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.delete("/exominer/jobs/{job_id}")
-async def delete_exominer_job(job_id: str):
+@app.get("/exominer/{analysis_id}/status")
+async def exominer_get_status(analysis_id: str):
     """
-    Supprime un job ExoMiner et ses fichiers
-    
-    Args:
-        job_id: ID du job ExoMiner à supprimer
-    
-    Returns:
-        Confirmation de suppression
+    Récupère le statut d'une analyse ExoMiner
     """
     try:
-        job_status = exominer_service.get_job_status(job_id)
+        metadata_path = os.path.join(
+            exominer_service.results_dir,
+            f"{analysis_id}_metadata.json"
+        )
         
-        if job_status is None:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        if not os.path.exists(metadata_path):
+            raise HTTPException(status_code=404, detail=f"Analyse {analysis_id} non trouvée")
         
-        # Supprimer les fichiers
-        output_dir = job_status.get('output_directory')
-        if output_dir and os.path.exists(output_dir):
-            import shutil
-            shutil.rmtree(output_dir)
-            logger.info(f"🗑️ Répertoire supprimé: {output_dir}")
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
         
-        # Supprimer du cache
-        if job_id in exominer_service.running_jobs:
-            del exominer_service.running_jobs[job_id]
-        
-        logger.info(f"🗑️ Job ExoMiner supprimé: {job_id}")
-        
-        return clean_for_json({
-            'success': True,
-            'message': f'Job {job_id} supprimé avec succès'
-        })
+        return {
+            'analysis_id': analysis_id,
+            'status': metadata.get('status', 'unknown'),
+            'created_at': metadata.get('created_at'),
+            'started_at': metadata.get('started_at'),
+            'completed_at': metadata.get('completed_at'),
+            'filename': metadata.get('filename'),
+            'info': metadata.get('info', {})
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Erreur suppression job ExoMiner {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression: {str(e)}")
+        logger.error(f"Erreur récupération statut: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
-@app.post("/exominer/cleanup")
-async def cleanup_exominer_jobs():
+@app.delete("/exominer/jobs/{job_id}")
+async def exominer_delete_job(job_id: str):
     """
-    Nettoie les anciens jobs ExoMiner
-    
-    Returns:
-        Nombre de jobs nettoyés
+    Supprime un job ExoMiner et ses fichiers
     """
     try:
-        before_count = len(exominer_service.running_jobs)
-        exominer_service.cleanup_old_jobs(max_age_hours=24)
-        after_count = len(exominer_service.running_jobs)
+        success, message = exominer_service.delete_analysis(job_id)
         
-        cleaned_count = before_count - after_count
+        if success:
+            return {
+                'success': True,
+                'message': message
+            }
+        else:
+            raise HTTPException(status_code=404, detail=message)
         
-        logger.info(f"🧹 Nettoyage ExoMiner: {cleaned_count} jobs supprimés")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur suppression job: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.post("/exominer/jobs/cleanup")
+async def exominer_cleanup_jobs():
+    """
+    Nettoie les jobs terminés/échoués
+    """
+    try:
+        analyses = exominer_service.list_analyses()
+        deleted_count = 0
         
-        return clean_for_json({
+        for analysis in analyses:
+            if analysis['status'] in ['completed', 'failed', 'error']:
+                # Optionnel: ne supprimer que les anciens jobs (> 7 jours)
+                try:
+                    created = datetime.fromisoformat(analysis['created_at'])
+                    age_days = (datetime.now() - created).days
+                    
+                    if age_days > 7:
+                        success, _ = exominer_service.delete_analysis(analysis['analysis_id'])
+                        if success:
+                            deleted_count += 1
+                except:
+                    pass
+        
+        return {
             'success': True,
-            'cleaned_jobs': cleaned_count,
-            'remaining_jobs': after_count
-        })
+            'message': f"{deleted_count} jobs nettoyés",
+            'deleted_count': deleted_count
+        }
         
     except Exception as e:
-        logger.error(f"❌ Erreur nettoyage ExoMiner: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur lors du nettoyage: {str(e)}")
+        logger.error(f"Erreur nettoyage jobs: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

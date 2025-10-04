@@ -1,0 +1,26 @@
+output_dir: !!python/object/apply:pathlib.PosixPath
+- /
+- outputs
+data_collection_mode: 2min
+tic_ids_fp: /tics_tbl.csv
+num_processes: 2
+num_jobs: 1
+download_spoc_data_products: 'true'
+external_data_repository: null
+lc_preprocessing_config_fp: exominer_pipeline/config_lc_preprocessing.yaml
+data_fields_tfrec_tbl:
+  uid: str
+  target_id: int
+  tce_plnt_num: int
+  sector_run: str
+diff_img_preprocessing_config_fp: exominer_pipeline/config_diff_img_preprocessing.yaml
+diff_img_add_tfrecord_dataset_config_fp: exominer_pipeline/config_add_diff_img_tfrecords.yaml
+normalize_tfrec_data_config_fp: exominer_pipeline/config_normalize_data.yaml
+exominer_models:
+  exominer++_single: exominer_pipeline/data/exominer-plusplus_cv-iter0-model0_tess-spoc-2min-s1s67_tess-kepler.keras
+  exominer++_cviter-mean-ensemble: exominer_pipeline/data/exominer-plusplus_cv-iter0-ensemble_tess-spoc-2min-s1s67_tess.keras
+  exominer++_cv-super-mean-ensemble: exominer_pipeline/data/exominer-plusplus_cv-mean-ensemble_tess-spoc-2min-s1s67_tess-kepler.keras
+model_fp: exominer_pipeline/data/exominer-plusplus_cv-iter0-model0_tess-spoc-2min-s1s67_tess-kepler.keras
+predict_config_fp: exominer_pipeline/config_predict_model.yaml
+stellar_parameters_source: ticv8
+ruwe_source: gaiadr2

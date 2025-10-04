@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Installation des dépendances système incluant Docker
+# Installation des dépendances système et Docker CLI
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -10,10 +10,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
-    && rm -rf /var/lib/apt/lists/*
-
-# Installation de Docker CLI
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y docker-ce-cli \
@@ -27,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Création des répertoires nécessaires
-RUN mkdir -p /app/data /app/models
+RUN mkdir -p /app/data /app/models /app/exominer_work/inputs /app/exominer_work/outputs /app/exominer_work/results
 
 EXPOSE 8000
 
