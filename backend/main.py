@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import pandas as pd
@@ -18,6 +18,7 @@ from ml_pipeline import ml_pipeline
 from data_utils import csv_to_polars, validate_exoplanet_data, format_prediction_results
 from exoplanet_validator import exoplanet_validator
 from column_mapper import column_mapper
+from exominer_service import exominer_service
 
 logger = logging.getLogger(__name__)
 
@@ -851,6 +852,220 @@ async def get_planet_details(dataset_id: str, planet_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération: {str(e)}")
 
+# ================================
+# GESTION DES MODÈLES LOCALSTORAGE
+# ================================
+
+@app.get("/models/localStorage/list")
+async def list_localStorage_models():
+    """
+    Liste les modèles disponibles sur le serveur pour download localStorage
+    """
+    try:
+        models_dir = "models"
+        available_models = []
+        
+        if os.path.exists(models_dir):
+            # Chercher les fichiers de modèles JSON
+            for filename in os.listdir(models_dir):
+                if filename.startswith('exoplanet_model_') and filename.endswith('.json'):
+                    # Extraire le format du nom de fichier
+                    format_type = filename.replace('exoplanet_model_', '').replace('.json', '')
+                    
+                    # Construire les chemins attendus
+                    model_path = os.path.join(models_dir, filename)
+                    
+                    model_info = {
+                        'format_type': format_type,
+                        'filename': filename,
+                        'available': os.path.exists(model_path),
+                        'last_modified': None
+                    }
+                    
+                    # Récupérer la date de modification si le fichier existe
+                    if os.path.exists(model_path):
+                        import time
+                        model_info['last_modified'] = time.ctime(os.path.getmtime(model_path))
+                    
+                    available_models.append(model_info)
+        
+        return {
+            'available_models': available_models,
+            'message': f'{len(available_models)} modèles disponibles pour localStorage'
+        }
+        
+    except Exception as e:
+        logger.error(f"Erreur liste models localStorage: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des modèles: {str(e)}")
+
+@app.get("/models/localStorage/download/{format_type}")
+async def download_model_for_localStorage(format_type: str):
+    """
+    Télécharge un modèle spécifique pour localStorage (JSON + métadonnées)
+    """
+    try:
+        model_file = f"models/exoplanet_model_{format_type}.json"
+        
+        if not os.path.exists(model_file):
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Aucun modèle disponible pour le format {format_type}"
+            )
+        
+        # Lire le modèle JSON
+        with open(model_file, 'r') as f:
+            model_json = json.load(f)
+        
+        # Charger temporairement le modèle pour récupérer les métadonnées
+        ml_pipeline.load_model(format_type=format_type)
+        metadata = {
+            'format_type': format_type,
+            'trained': ml_pipeline.trained,
+            'feature_columns': ml_pipeline.feature_columns,
+            'label_encoder_classes': list(ml_pipeline.label_encoder.classes_) if ml_pipeline.label_encoder else []
+        }
+        
+        return {
+            'model_json': model_json,
+            'metadata': metadata,
+            'format_type': format_type,
+            'message': f'Modèle {format_type} préparé pour localStorage'
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur download model {format_type}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du téléchargement: {str(e)}")
+
+@app.post("/models/localStorage/upload")
+async def upload_model_from_localStorage(model_data: Dict[str, Any]):
+    """
+    Upload un modèle depuis localStorage vers le serveur
+    """
+    try:
+        format_type = model_data.get('format_type')
+        model_json = model_data.get('model_json')
+        
+        if not format_type or not model_json:
+            raise HTTPException(
+                status_code=400,
+                detail="format_type et model_json sont requis"
+            )
+        
+        # Créer le répertoire models s'il n'existe pas
+        os.makedirs("models", exist_ok=True)
+        
+        # Sauvegarder le modèle JSON
+        model_file = f"models/exoplanet_model_{format_type}.json"
+        with open(model_file, 'w') as f:
+            json.dump(model_json, f, indent=2)
+        
+        logger.info(f"Modèle {format_type} uploadé depuis localStorage vers le serveur")
+        
+        return {
+            'message': f'Modèle {format_type} uploadé avec succès vers le serveur',
+            'format_type': format_type,
+            'model_file': model_file
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur upload model localStorage: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'upload: {str(e)}")
+
+@app.post("/models/localStorage/load/{format_type}")
+async def load_model_from_localStorage(format_type: str, model_data: Dict[str, Any]):
+    """
+    Charge un modèle depuis localStorage dans le pipeline ML pour l'analyse
+    """
+    try:
+        model_json = model_data.get('model_json')
+        feature_columns = model_data.get('feature_columns', [])
+        
+        if not model_json:
+            raise HTTPException(
+                status_code=400,
+                detail="model_json est requis"
+            )
+        
+        # Charger le modèle dans le pipeline
+        ml_pipeline.load_model_from_json(model_json, feature_columns)
+        
+        logger.info(f"Modèle {format_type} chargé depuis localStorage pour analyse")
+        
+        return {
+            'message': f'Modèle {format_type} chargé avec succès depuis localStorage',
+            'format_type': format_type,
+            'trained': ml_pipeline.trained,
+            'feature_count': len(feature_columns)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur load model localStorage: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du chargement: {str(e)}")
+
+@app.post("/analyze/withModel")
+async def analyze_with_saved_model(file: UploadFile = File(...), format_type: str = Form(...)):
+    """
+    Analyse un CSV avec un modèle spécifique déjà chargé (format_type)
+    Workflow: Upload → Validation des planètes (sans entraînement)
+    """
+    try:
+        # Étape 1: Lecture et validation du CSV
+        logger.info(f"📤 Analyse avec modèle {format_type} - Upload: {file.filename}")
+        
+        contents = await file.read()
+        csv_content = contents.decode('utf-8')
+        
+        # Lecture avec Polars
+        df = csv_to_polars(csv_content, auto_map=False)
+        
+        # Validation et détection du format (pour info seulement)
+        df_processed, validation_info = column_mapper.process_dataframe(df)
+        
+        if not validation_info['is_valid']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV invalide: {'; '.join(validation_info['errors'])}"
+            )
+        
+        csv_info = {
+            'filename': file.filename,
+            'detected_format': validation_info['format'],
+            'detected_format_name': validation_info['format_name'],
+            'total_rows': validation_info['total_rows'],
+            'total_columns': validation_info['total_columns'],
+            'analysis_format': format_type
+        }
+        
+        logger.info(f"✅ CSV validé - Analysé avec modèle {format_type}")
+        
+        # Étape 2: Validation des planètes avec le modèle chargé
+        logger.info(f"🔍 Validation des exoplanètes avec modèle {format_type}...")
+        
+        validation_results = exoplanet_validator.predict_confirmations(df_processed)
+        
+        logger.info(f"✅ Analyse terminée - {validation_results['analysis_summary']['confirmed_count']} planètes confirmables")
+        
+        # Construire la réponse
+        response = {
+            'csv_info': csv_info,
+            'model_format': format_type,
+            'validation': validation_results
+        }
+        
+        return clean_for_json(response)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur analyse avec modèle {format_type}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
+
 @app.post("/analyze")
 async def analyze_full_workflow(file: UploadFile = File(...)):
     """
@@ -940,6 +1155,277 @@ async def analyze_full_workflow(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"❌ Erreur analyse automatique: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse: {str(e)}")
+
+# ============================================================================
+# ENDPOINTS EXOMINER NASA
+# ============================================================================
+
+@app.post("/exominer/analyze")
+async def analyze_with_exominer(
+    file: UploadFile = File(...),
+    data_collection_mode: str = Form("2min"),
+    num_processes: int = Form(2),
+    num_jobs: int = Form(1),
+    download_spoc_data_products: bool = Form(True),
+    stellar_parameters_source: str = Form("ticv8"),
+    ruwe_source: str = Form("gaiadr2"),
+    exominer_model: str = Form("exominer++_single")
+):
+    """
+    Analyse un fichier CSV de TIC IDs avec ExoMiner de la NASA
+    
+    Args:
+        file: Fichier CSV contenant les TIC IDs et sector runs
+        data_collection_mode: Mode de collecte (2min ou FFI)
+        num_processes: Nombre de processus parallèles
+        num_jobs: Nombre de jobs
+        download_spoc_data_products: Télécharger les produits SPOC DV
+        stellar_parameters_source: Source des paramètres stellaires
+        ruwe_source: Source des valeurs RUWE Gaia
+        exominer_model: Modèle ExoMiner à utiliser
+    
+    Returns:
+        Résultats de l'analyse ExoMiner
+    """
+    try:
+        # Vérifier le type de fichier
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Le fichier doit être un CSV")
+        
+        # Lire le contenu du fichier
+        csv_content = await file.read()
+        csv_content_str = csv_content.decode('utf-8')
+        
+        logger.info(f"🚀 Démarrage analyse ExoMiner pour {file.filename}")
+        
+        # Lancer l'analyse ExoMiner
+        result = await exominer_service.analyze_tics_csv(
+            csv_content=csv_content_str,
+            filename=file.filename,
+            data_collection_mode=data_collection_mode,
+            num_processes=num_processes,
+            num_jobs=num_jobs,
+            download_spoc_data_products=download_spoc_data_products,
+            stellar_parameters_source=stellar_parameters_source,
+            ruwe_source=ruwe_source,
+            exominer_model=exominer_model
+        )
+        
+        logger.info(f"✅ Analyse ExoMiner terminée: {result['job_id']}")
+        
+        return clean_for_json({
+            'success': True,
+            'job_id': result['job_id'],
+            'message': 'Analyse ExoMiner lancée avec succès',
+            'validation': result['validation'],
+            'output_directory': result['output_directory'],
+            'results': result['results']
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur analyse ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'analyse ExoMiner: {str(e)}")
+
+@app.get("/exominer/jobs")
+async def list_exominer_jobs():
+    """
+    Liste tous les jobs ExoMiner
+    
+    Returns:
+        Liste des jobs avec leur statut
+    """
+    try:
+        jobs = exominer_service.list_jobs()
+        return clean_for_json(jobs)
+    except Exception as e:
+        logger.error(f"❌ Erreur liste jobs ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des jobs: {str(e)}")
+
+@app.get("/exominer/jobs/{job_id}")
+async def get_exominer_job_status(job_id: str):
+    """
+    Récupère le statut d'un job ExoMiner spécifique
+    
+    Args:
+        job_id: ID du job ExoMiner
+    
+    Returns:
+        Statut détaillé du job
+    """
+    try:
+        job_status = exominer_service.get_job_status(job_id)
+        
+        if job_status is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        
+        return clean_for_json(job_status)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur statut job ExoMiner {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération du statut: {str(e)}")
+
+@app.get("/exominer/jobs/{job_id}/results")
+async def get_exominer_job_results(job_id: str):
+    """
+    Récupère les résultats détaillés d'un job ExoMiner
+    
+    Args:
+        job_id: ID du job ExoMiner
+    
+    Returns:
+        Résultats détaillés de l'analyse
+    """
+    try:
+        job_status = exominer_service.get_job_status(job_id)
+        
+        if job_status is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        
+        if job_status['status'] != 'completed':
+            raise HTTPException(status_code=400, detail=f"Job {job_id} pas encore terminé (statut: {job_status['status']})")
+        
+        # Récupérer les résultats détaillés
+        results = job_status.get('result', {})
+        
+        return clean_for_json({
+            'job_id': job_id,
+            'status': job_status['status'],
+            'duration_seconds': job_status.get('duration_seconds', 0),
+            'results': results.get('results', {}),
+            'success': results.get('success', False)
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur résultats job ExoMiner {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération des résultats: {str(e)}")
+
+@app.get("/exominer/jobs/{job_id}/download")
+async def download_exominer_results(job_id: str):
+    """
+    Télécharge les résultats d'un job ExoMiner sous forme de fichier ZIP
+    
+    Args:
+        job_id: ID du job ExoMiner
+    
+    Returns:
+        Fichier ZIP contenant tous les résultats
+    """
+    try:
+        job_status = exominer_service.get_job_status(job_id)
+        
+        if job_status is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        
+        if job_status['status'] != 'completed':
+            raise HTTPException(status_code=400, detail=f"Job {job_id} pas encore terminé")
+        
+        output_dir = job_status['output_directory']
+        
+        if not os.path.exists(output_dir):
+            raise HTTPException(status_code=404, detail="Répertoire de résultats non trouvé")
+        
+        # Créer un fichier ZIP temporaire
+        import zipfile
+        import io
+        
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for root, dirs, files in os.walk(output_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arc_name = os.path.relpath(file_path, output_dir)
+                    zip_file.write(file_path, arc_name)
+        
+        zip_buffer.seek(0)
+        
+        return Response(
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename=exominer_results_{job_id}.zip"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur téléchargement job ExoMiner {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du téléchargement: {str(e)}")
+
+@app.delete("/exominer/jobs/{job_id}")
+async def delete_exominer_job(job_id: str):
+    """
+    Supprime un job ExoMiner et ses fichiers
+    
+    Args:
+        job_id: ID du job ExoMiner à supprimer
+    
+    Returns:
+        Confirmation de suppression
+    """
+    try:
+        job_status = exominer_service.get_job_status(job_id)
+        
+        if job_status is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} non trouvé")
+        
+        # Supprimer les fichiers
+        output_dir = job_status.get('output_directory')
+        if output_dir and os.path.exists(output_dir):
+            import shutil
+            shutil.rmtree(output_dir)
+            logger.info(f"🗑️ Répertoire supprimé: {output_dir}")
+        
+        # Supprimer du cache
+        if job_id in exominer_service.running_jobs:
+            del exominer_service.running_jobs[job_id]
+        
+        logger.info(f"🗑️ Job ExoMiner supprimé: {job_id}")
+        
+        return clean_for_json({
+            'success': True,
+            'message': f'Job {job_id} supprimé avec succès'
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression job ExoMiner {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression: {str(e)}")
+
+@app.post("/exominer/cleanup")
+async def cleanup_exominer_jobs():
+    """
+    Nettoie les anciens jobs ExoMiner
+    
+    Returns:
+        Nombre de jobs nettoyés
+    """
+    try:
+        before_count = len(exominer_service.running_jobs)
+        exominer_service.cleanup_old_jobs(max_age_hours=24)
+        after_count = len(exominer_service.running_jobs)
+        
+        cleaned_count = before_count - after_count
+        
+        logger.info(f"🧹 Nettoyage ExoMiner: {cleaned_count} jobs supprimés")
+        
+        return clean_for_json({
+            'success': True,
+            'cleaned_jobs': cleaned_count,
+            'remaining_jobs': after_count
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur nettoyage ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors du nettoyage: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

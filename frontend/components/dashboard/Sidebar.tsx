@@ -10,7 +10,9 @@ import {
   Settings, 
   Database, 
   Home,
-  Rocket
+  Rocket,
+  Cpu,
+  Eye
 } from 'lucide-react';
 
 interface SidebarProps {}
@@ -25,6 +27,20 @@ const Sidebar: React.FC<SidebarProps> = () => {
       icon: Upload,
       href: '/dashboard/analyze',
       description: 'Détecter des exoplanètes'
+    },
+    {
+      id: 'models',
+      label: 'Mes Modèles',
+      icon: Cpu,
+      href: '/dashboard/models',
+      description: 'Gérer mes modèles'
+    },
+    {
+      id: 'exominer',
+      label: 'ExoMiner NASA', 
+      icon: Eye,
+      href: '/dashboard/exominer',
+      description: 'Pipeline NASA professionnel'
     }
   ];
 
