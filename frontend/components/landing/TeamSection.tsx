@@ -4,6 +4,13 @@ import React from 'react';
 import ProfileCard from './ProfileCard';
 
 const TeamSection: React.FC = () => {
+  const profileLinks: Record<string, string> = {
+    hugo: 'https://www.linkedin.com/in/hugo-hountondji/',
+    lucas: 'https://www.linkedin.com/in/lucas-bonere/',
+    evan: 'https://www.linkedin.com/in/evan-gr%C3%A9ven-b2800b22b/',
+    anto: 'https://www.linkedin.com/in/anto-benedetti/',
+    divin: 'https://www.linkedin.com/in/divin-badiabo-tech/'
+  };
   const team = [
     {
       name: 'Anto BENEDETTI',
@@ -55,14 +62,17 @@ const TeamSection: React.FC = () => {
               title=""
               handle={m.handle}
               status="Online"
-              contactText="Contact Me"
+              contactText="LinkedIn"
               avatarUrl={m.avatarUrl}
               avatarScale={m.handle === 'lucas' ? 1.50 : m.handle === 'anto' ? 0.88 : 1}
               avatarBottomOffset={m.handle === 'lucas' ? 0 : m.handle === 'anto' ? 0 : 2}
               showUserInfo={true}
               enableTilt={true}
               enableMobileTilt={false}
-              onContactClick={() => console.log('Contact clicked', m.handle)}
+              onContactClick={() => {
+                const url = profileLinks[m.handle];
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+              }}
             />
           </div>
         ))}

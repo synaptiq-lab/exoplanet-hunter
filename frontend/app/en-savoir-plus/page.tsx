@@ -67,7 +67,7 @@ const EnSavoirPlusPage = () => {
             <FadeIn delayMs={150}>
               <div style={{ height: 600, position: 'relative' }}>
                 <CardSwap cardDistance={60} verticalDistance={70} delay={5000} pauseOnHover={false}>
-                  <Card headerLabel="Smooth">
+                  <Card headerLabel="Kepler 1">
                     <img
                       src="/team/kepler_1.png"
                       alt="Kepler 1"
@@ -75,7 +75,7 @@ const EnSavoirPlusPage = () => {
                       loading="lazy"
                     />
                   </Card>
-                  <Card headerLabel="Reliable">
+                  <Card headerLabel="Kepler 2">
                     <img
                       src="/team/kepler_2.jpg"
                       alt="Kepler 2"
@@ -83,7 +83,7 @@ const EnSavoirPlusPage = () => {
                       loading="lazy"
                     />
                   </Card>
-                  <Card headerLabel="Customizable">
+                  <Card headerLabel="Tess">
                     <img
                       src="/team/tess.jpg"
                       alt="TESS"

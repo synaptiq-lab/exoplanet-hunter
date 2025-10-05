@@ -310,6 +310,11 @@
   pointer-events: auto;
 }
 
+/* Autoriser explicitement le clic sur le bouton */
+.pc-user-info .pc-contact-btn {
+  pointer-events: auto;
+}
+
 .pc-user-details {
   display: flex;
   align-items: center;
