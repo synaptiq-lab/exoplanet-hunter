@@ -16,6 +16,13 @@ import shutil
 
 logger = logging.getLogger(__name__)
 
+# Import de la fonction helper pour parser les résultats ExoMiner
+try:
+    from exominer_helper import build_results_table
+except ImportError:
+    logger.warning("exominer_helper non disponible, parsing des résultats limité")
+    build_results_table = None
+
 # Configuration
 IMAGE_NAME = "ghcr.io/nasa/exominer:amd64"
 EXOMINER_WORK_DIR = "exominer_work"
@@ -435,13 +442,46 @@ class ExoMinerService:
                             'size_mb': round(size_mb, 2)
                         })
             
-            # Chercher le catalogue de résultats
+            # Parser predictions_outputs.csv avec build_results_table
+            predictions_data = None
+            predictions_file = next((f for f in files if f['name'] == 'predictions_outputs.csv'), None)
+            
+            if predictions_file and build_results_table:
+                try:
+                    logger.info(f"Parsing predictions_outputs.csv: {predictions_file['path']}")
+                    results_df = build_results_table(predictions_file['path'])
+                    
+                    # Convertir en dictionnaire pour le frontend
+                    predictions_data = {
+                        'confirmed': results_df.filter(results_df['result'] == 'Confirmed').to_dicts(),
+                        'candidates': results_df.filter(results_df['result'] == 'Candidate').to_dicts(),
+                        'false_positives': results_df.filter(results_df['result'] == 'False Positive').to_dicts(),
+                        'total': len(results_df),
+                        'confirmed_count': len(results_df.filter(results_df['result'] == 'Confirmed')),
+                        'candidates_count': len(results_df.filter(results_df['result'] == 'Candidate')),
+                        'false_positives_count': len(results_df.filter(results_df['result'] == 'False Positive'))
+                    }
+                    
+                    logger.info(f"✅ Résultats parsés: {predictions_data['confirmed_count']} confirmées, "
+                              f"{predictions_data['candidates_count']} candidates, "
+                              f"{predictions_data['false_positives_count']} faux positifs")
+                except Exception as e:
+                    logger.error(f"Erreur parsing predictions_outputs.csv: {e}")
+            
+            # Chercher le catalogue de résultats (pour info supplémentaire)
             catalog_data = None
             summary = {
                 'total_tics_processed': metadata.get('info', {}).get('total_tics', 0),
-                'high_confidence_candidates': 0,
+                'high_confidence_candidates': predictions_data['confirmed_count'] if predictions_data else 0,
                 'avg_score': None
             }
+            
+            if predictions_data:
+                # Calculer le score moyen
+                all_scores = ([p['score'] for p in predictions_data['confirmed']] + 
+                             [p['score'] for p in predictions_data['candidates']] + 
+                             [p['score'] for p in predictions_data['false_positives']])
+                summary['avg_score'] = sum(all_scores) / len(all_scores) if all_scores else None
             
             catalog_files = [f for f in files if 'catalog' in f['name'].lower() and f['name'].endswith('.csv')]
             
@@ -464,8 +504,6 @@ class ExoMinerService:
                         score_col = score_cols[0]
                         if pd.api.types.is_numeric_dtype(df[score_col]):
                             high_conf = df[df[score_col] > 0.8]
-                            summary['high_confidence_candidates'] = len(high_conf)
-                            summary['avg_score'] = float(df[score_col].mean())
                             catalog_data['high_confidence_candidates'] = len(high_conf)
                             catalog_data['average_score'] = float(df[score_col].mean())
                     
@@ -484,6 +522,7 @@ class ExoMinerService:
                 'progress': metadata.get('progress', 100),
                 'results': {
                     'summary': summary,
+                    'predictions': predictions_data,  # Données parsées avec build_results_table
                     'exominer_catalog': catalog_data,
                     'files': files,
                     'total_files': len(files)

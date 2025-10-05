@@ -17,7 +17,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { 
-  analyzeWithExoMiner, 
+  analyzeWithExoMiner,
+  analyzeWithExoMinerFromTics,
   listExoMinerJobs, 
   getExoMinerJobStatus, 
   getExoMinerJobResults,
@@ -26,7 +27,8 @@ import {
   cleanupExoMinerJobs,
   ExoMinerJob,
   ExoMinerResults,
-  ExoMinerAnalysisParams
+  ExoMinerAnalysisParams,
+  ExoMinerPrediction
 } from '@/lib/api';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 
@@ -41,6 +43,10 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
   const [jobResults, setJobResults] = useState<ExoMinerResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [inputMode, setInputMode] = useState<'file' | 'manual'>('file');
+  const [manualTicInput, setManualTicInput] = useState('');
+  const [manualSectorInput, setManualSectorInput] = useState('');
+  const [autoFetchSectors, setAutoFetchSectors] = useState(true);
   
   // Paramètres ExoMiner
   const [params, setParams] = useState<ExoMinerAnalysisParams>({
@@ -103,17 +109,68 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
   };
 
   const handleAnalyze = async () => {
-    if (!uploadedFile) return;
-
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      const result = await analyzeWithExoMiner(uploadedFile, params);
+      let result;
+
+      if (inputMode === 'manual') {
+        // Mode saisie manuelle
+        if (!manualTicInput.trim()) {
+          setError('Veuillez saisir au moins un TIC ID');
+          setIsAnalyzing(false);
+          return;
+        }
+
+        // Parser les TIC IDs
+        const ticIds = manualTicInput
+          .split(/[,\n\s]+/)
+          .map(tic => tic.trim())
+          .filter(tic => tic && !isNaN(Number(tic)))
+          .map(tic => Number(tic));
+
+        if (ticIds.length === 0) {
+          setError('Aucun TIC ID valide trouvé');
+          setIsAnalyzing(false);
+          return;
+        }
+
+        // Parser les secteurs si fournis
+        let sectors: string[] | undefined = undefined;
+        if (!autoFetchSectors && manualSectorInput.trim()) {
+          sectors = manualSectorInput
+            .split(/[,\n\s]+/)
+            .map(s => s.trim())
+            .filter(s => s);
+
+          if (sectors.length !== ticIds.length) {
+            setError(`Nombre de secteurs (${sectors.length}) différent du nombre de TIC IDs (${ticIds.length})`);
+            setIsAnalyzing(false);
+            return;
+          }
+        }
+
+        result = await analyzeWithExoMinerFromTics(ticIds, sectors, params);
+      } else {
+        // Mode fichier
+        if (!uploadedFile) {
+          setError('Veuillez sélectionner un fichier');
+          setIsAnalyzing(false);
+          return;
+        }
+
+        result = await analyzeWithExoMiner(uploadedFile, params);
+      }
       
       if (result.success) {
         setSelectedJob(result.job_id);
         await loadJobs();
+        // Réinitialiser les champs de saisie manuelle
+        if (inputMode === 'manual') {
+          setManualTicInput('');
+          setManualSectorInput('');
+        }
       } else {
         setError('Échec du lancement de l\'analyse ExoMiner');
       }
@@ -132,6 +189,8 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
       if (job.status === 'completed') {
         const results = await getExoMinerJobResults(jobId);
         setJobResults(results);
+        
+        // Les prédictions s'affichent maintenant directement dans le tableau
       } else {
         setJobResults(null);
       }
@@ -176,6 +235,45 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
     } catch (err) {
       setError('Erreur lors du nettoyage');
     }
+  };
+
+  const exportPredictionsCSV = () => {
+    if (!jobResults?.results || !('predictions' in jobResults.results) || !jobResults.results.predictions) return;
+
+    const predictions = jobResults.results.predictions;
+    
+    // Créer le contenu CSV avec toutes les prédictions
+    const csvContent = [
+      ['TIC ID', 'Résultat', 'Score'],
+      // Planètes confirmées
+      ...predictions.confirmed.map((planet: ExoMinerPrediction) => [
+        planet.tic_id,
+        'Confirmée',
+        planet.score.toFixed(3)
+      ]),
+      // Candidates
+      ...predictions.candidates.map((planet: ExoMinerPrediction) => [
+        planet.tic_id,
+        'Candidate',
+        planet.score.toFixed(3)
+      ]),
+      // Faux positifs
+      ...predictions.false_positives.map((planet: ExoMinerPrediction) => [
+        planet.tic_id,
+        'Faux Positif',
+        planet.score.toFixed(3)
+      ])
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `exominer_predictions_${selectedJob}_${new Date().getTime()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   const getStatusIcon = (status: string) => {
@@ -239,12 +337,36 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
           >
             <div className="card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-white">Upload CSV</h2>
+                <h2 className="text-xl font-semibold text-white">Entrée des données</h2>
                 <button
                   onClick={() => setShowSettings(!showSettings)}
                   className="p-2 text-space-400 hover:text-white transition-colors"
                 >
                   <Settings className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mode Selection */}
+              <div className="mb-4 flex space-x-2">
+                <button
+                  onClick={() => setInputMode('file')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    inputMode === 'file'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-space-700 text-space-300 hover:bg-space-600'
+                  }`}
+                >
+                  📁 Fichier CSV
+                </button>
+                <button
+                  onClick={() => setInputMode('manual')}
+                  className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    inputMode === 'manual'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-space-700 text-space-300 hover:bg-space-600'
+                  }`}
+                >
+                  ✏️ Saisie manuelle
                 </button>
               </div>
 
@@ -295,46 +417,101 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
                 </motion.div>
               )}
 
-              {/* File Upload */}
-              <div
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                className="border-2 border-dashed border-space-600 rounded-lg p-8 text-center hover:border-space-500 transition-colors"
-              >
-                <Upload className="w-12 h-12 text-space-400 mx-auto mb-4" />
-                <p className="text-space-300 mb-2">Glissez votre fichier CSV ici</p>
-                <p className="text-space-400 text-sm mb-4">ou</p>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="csv-upload"
-                />
-                <label
-                  htmlFor="csv-upload"
-                  className="btn-primary cursor-pointer"
-                >
-                  Sélectionner un fichier
-                </label>
-              </div>
-
-              {uploadedFile && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-3 bg-space-700/30 rounded-lg"
-                >
-                  <div className="flex items-center">
-                    <FileText className="w-5 h-5 text-primary-400 mr-2" />
-                    <span className="text-white text-sm">{uploadedFile.name}</span>
+              {/* Manual Input */}
+              {inputMode === 'manual' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-white font-medium mb-2">
+                      TIC IDs <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={manualTicInput}
+                      onChange={(e) => setManualTicInput(e.target.value)}
+                      placeholder="Exemple: 12345, 67890, 11111&#10;ou un TIC par ligne"
+                      className="w-full h-32 px-3 py-2 bg-space-700 border border-space-600 rounded-lg text-white placeholder-space-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500"
+                    />
+                    <p className="text-space-500 text-xs mt-1">
+                      Séparés par virgule, espace ou nouvelle ligne
+                    </p>
                   </div>
-                </motion.div>
+
+                  <div>
+                    <label className="flex items-center space-x-2 mb-3">
+                      <input
+                        type="checkbox"
+                        checked={autoFetchSectors}
+                        onChange={(e) => setAutoFetchSectors(e.target.checked)}
+                        className="w-4 h-4 text-primary-600 bg-space-700 border-space-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-white text-sm font-medium">
+                        Récupérer automatiquement les secteurs (via astroquery)
+                      </span>
+                    </label>
+
+                    {!autoFetchSectors && (
+                      <div>
+                        <label className="block text-white font-medium mb-2">
+                          Secteurs <span className="text-red-400">*</span>
+                        </label>
+                        <textarea
+                          value={manualSectorInput}
+                          onChange={(e) => setManualSectorInput(e.target.value)}
+                          placeholder="Exemple: 1, 2, 3&#10;Un secteur par TIC ID, dans le même ordre"
+                          className="w-full h-24 px-3 py-2 bg-space-700 border border-space-600 rounded-lg text-white placeholder-space-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500"
+                        />
+                        <p className="text-space-500 text-xs mt-1">
+                          ⚠️ Doit correspondre à l'ordre des TIC IDs
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* File Upload */}
+              {inputMode === 'file' && (
+                <>
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(e) => e.preventDefault()}
+                    className="border-2 border-dashed border-space-600 rounded-lg p-8 text-center hover:border-space-500 transition-colors"
+                  >
+                    <Upload className="w-12 h-12 text-space-400 mx-auto mb-4" />
+                    <p className="text-space-300 mb-2">Glissez votre fichier CSV ici</p>
+                    <p className="text-space-400 text-sm mb-4">ou</p>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      id="csv-upload"
+                    />
+                    <label
+                      htmlFor="csv-upload"
+                      className="btn-primary cursor-pointer"
+                    >
+                      Sélectionner un fichier
+                    </label>
+                  </div>
+
+                  {uploadedFile && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-3 bg-space-700/30 rounded-lg"
+                    >
+                      <div className="flex items-center">
+                        <FileText className="w-5 h-5 text-primary-400 mr-2" />
+                        <span className="text-white text-sm">{uploadedFile.name}</span>
+                      </div>
+                    </motion.div>
+                  )}
+                </>
               )}
 
               <button
                 onClick={handleAnalyze}
-                disabled={!uploadedFile || isAnalyzing}
+                disabled={(inputMode === 'file' && !uploadedFile) || (inputMode === 'manual' && !manualTicInput.trim()) || isAnalyzing}
                 className="w-full mt-4 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
@@ -474,27 +651,115 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
                 </div>
               </div>
 
-              {jobResults.results.exominer_catalog && (
-                <div className="bg-space-700/30 rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-white mb-3">Catalogue ExoMiner</h3>
+              {/* Prédictions ExoMiner */}
+              {jobResults.results && 'predictions' in jobResults.results && jobResults.results.predictions && (
+                <div className="card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-2xl font-bold text-white flex items-center">
+                      <CheckCircle className="h-6 w-6 text-primary-400 mr-2" />
+                      Prédictions ExoMiner ({jobResults.results.predictions.total})
+                    </h3>
+                    <button
+                      onClick={exportPredictionsCSV}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span>Exporter CSV</span>
+                    </button>
+                  </div>
+                  
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full">
                       <thead>
-                        <tr className="border-b border-space-600">
-                          {jobResults.results.exominer_catalog.columns.slice(0, 5).map((col) => (
-                            <th key={col} className="text-left py-2 text-space-400">{col}</th>
-                          ))}
+                        <tr className="border-b border-space-700">
+                          <th className="text-left py-3 px-4 text-space-300 font-semibold">TIC ID</th>
+                          <th className="text-left py-3 px-4 text-space-300 font-semibold">Résultat</th>
+                          <th className="text-left py-3 px-4 text-space-300 font-semibold">Score</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {jobResults.results.exominer_catalog?.sample_data.slice(0, 5).map((row, idx) => (
-                          <tr key={idx} className="border-b border-space-700">
-                            {jobResults.results.exominer_catalog?.columns.slice(0, 5).map((col) => (
-                              <td key={col} className="py-2 text-space-300">
-                                {row[col]}
-                              </td>
-                            ))}
-                          </tr>
+                        {/* Planètes Confirmées */}
+                        {jobResults.results.predictions.confirmed.map((planet: ExoMinerPrediction, index: number) => (
+                          <motion.tr
+                            key={`confirmed-${planet.tic_id}`}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="border-b border-space-700/50 hover:bg-green-500/5 transition-colors"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <CheckCircle className="h-4 w-4 text-green-400" />
+                                <span className="font-semibold text-white">TIC {planet.tic_id}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm font-medium">
+                                Confirmée
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-green-400 font-bold">
+                                {planet.score.toFixed(3)}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        ))}
+                        
+                        {/* Candidates */}
+                        {jobResults.results.predictions.candidates.map((planet: ExoMinerPrediction, index: number) => (
+                          <motion.tr
+                            key={`candidate-${planet.tic_id}`}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: ((jobResults.results.predictions?.confirmed.length || 0) + index) * 0.05 }}
+                            className="border-b border-space-700/50 hover:bg-yellow-500/5 transition-colors"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <Clock className="h-4 w-4 text-yellow-400" />
+                                <span className="font-semibold text-white">TIC {planet.tic_id}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-sm font-medium">
+                                Candidate
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-yellow-400 font-bold">
+                                {planet.score.toFixed(3)}
+                              </span>
+                            </td>
+                          </motion.tr>
+                        ))}
+                        
+                        {/* Faux Positifs */}
+                        {jobResults.results.predictions.false_positives.map((planet: ExoMinerPrediction, index: number) => (
+                          <motion.tr
+                            key={`false-positive-${planet.tic_id}`}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: ((jobResults.results.predictions?.confirmed.length || 0) + (jobResults.results.predictions?.candidates.length || 0) + index) * 0.05 }}
+                            className="border-b border-space-700/50 hover:bg-red-500/5 transition-colors"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <XCircle className="h-4 w-4 text-red-400" />
+                                <span className="font-semibold text-white">TIC {planet.tic_id}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm font-medium">
+                                Faux Positif
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-red-400 font-bold">
+                                {planet.score.toFixed(3)}
+                              </span>
+                            </td>
+                          </motion.tr>
                         ))}
                       </tbody>
                     </table>
@@ -504,6 +769,7 @@ const ExoMinerPage: React.FC<ExoMinerPageProps> = () => {
             </div>
           </motion.div>
         )}
+
         </div>
       </div>
     </DashboardLayout>

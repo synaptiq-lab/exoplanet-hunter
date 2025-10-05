@@ -44,6 +44,22 @@ export interface ExoMinerJob {
   info?: any;
 }
 
+export interface ExoMinerPrediction {
+  tic_id: number;
+  result: 'Confirmed' | 'Candidate' | 'False Positive';
+  score: number;
+}
+
+export interface ExoMinerPredictions {
+  confirmed: ExoMinerPrediction[];
+  candidates: ExoMinerPrediction[];
+  false_positives: ExoMinerPrediction[];
+  total: number;
+  confirmed_count: number;
+  candidates_count: number;
+  false_positives_count: number;
+}
+
 export interface ExoMinerResults {
   job_id: string;
   status: string;
@@ -59,6 +75,7 @@ export interface ExoMinerResults {
       high_confidence_candidates: number;
       avg_score?: number;
     };
+    predictions?: ExoMinerPredictions;
     exominer_catalog?: {
       total_objects: number;
       unique_stars: number;
@@ -248,6 +265,37 @@ export const apiClient = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 900000, // 15 minutes
+    });
+    
+    return response.data;
+  },
+
+  // Analyser avec ExoMiner depuis TIC IDs (avec ou sans secteurs)
+  async analyzeWithExoMinerFromTics(
+    ticIds: number[],
+    sectors?: string[],
+    params?: {
+      data_collection_mode?: string;
+      num_processes?: number;
+      num_jobs?: number;
+      download_spoc_data_products?: boolean;
+      stellar_parameters_source?: string;
+      ruwe_source?: string;
+      exominer_model?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    job_id: string;
+    tic_count: number;
+    rows_generated: number;
+  }> {
+    const response = await api.post('/exominer/analyze-from-tics', {
+      tic_ids: ticIds,
+      sectors: sectors,
+      params: params || {}
+    }, {
       timeout: 900000, // 15 minutes
     });
     
@@ -581,6 +629,7 @@ export const apiClient = {
 // Export des fonctions ExoMiner pour la page
 export const {
   analyzeWithExoMiner,
+  analyzeWithExoMinerFromTics,
   listExoMinerJobs,
   getExoMinerJobStatus,
   getExoMinerJobResults,

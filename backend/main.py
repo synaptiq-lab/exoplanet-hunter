@@ -12,6 +12,7 @@ from datetime import datetime
 import os
 import logging
 import math
+import uuid
 
 # Import des modules ML personnalisés
 from ml_pipeline import ml_pipeline
@@ -1259,6 +1260,120 @@ async def exominer_upload_tics(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"Erreur upload ExoMiner: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+@app.post("/exominer/analyze-from-tics")
+async def exominer_analyze_from_tics(request: Dict[str, Any]):
+    """
+    Lance une analyse ExoMiner à partir de TIC IDs (avec ou sans secteurs)
+    Si sectors n'est pas fourni, ils seront récupérés automatiquement via astroquery
+    
+    Body JSON:
+        {
+            "tic_ids": [12345, 67890],
+            "sectors": ["1", "2"],  // Optionnel
+            "params": { ... }       // Paramètres ExoMiner optionnels
+        }
+    """
+    try:
+        from exominer_helper import get_sectors_from_tic, format_inputs
+        import polars as pl
+        
+        tic_ids = request.get('tic_ids', [])
+        sectors = request.get('sectors')
+        params = request.get('params', {})
+        
+        if not tic_ids:
+            raise HTTPException(status_code=400, detail="tic_ids requis")
+        
+        # Créer un DataFrame avec les TIC IDs
+        if sectors and len(sectors) == len(tic_ids):
+            # Cas avec secteurs fournis
+            logger.info(f"Analyse de {len(tic_ids)} TIC IDs avec secteurs fournis")
+            data = {
+                'tic_id': tic_ids,
+                'sectors': [[int(s)] for s in sectors]
+            }
+        else:
+            # Cas sans secteurs : récupération automatique
+            logger.info(f"Récupération automatique des secteurs pour {len(tic_ids)} TIC IDs...")
+            sectors_data = []
+            for tic in tic_ids:
+                try:
+                    sectors_list = get_sectors_from_tic(tic)
+                    if not sectors_list:
+                        logger.warning(f"Aucun secteur trouvé pour TIC {tic}")
+                        sectors_list = []
+                    sectors_data.append(sectors_list)
+                except Exception as e:
+                    logger.error(f"Erreur récupération secteurs pour TIC {tic}: {e}")
+                    sectors_data.append([])
+            
+            data = {
+                'tic_id': tic_ids,
+                'sectors': sectors_data
+            }
+        
+        # Créer le DataFrame et le formater
+        df = pl.DataFrame(data)
+        formatted_df = format_inputs(df)
+        
+        # Sauvegarder le CSV formaté dans un buffer
+        csv_buffer = io.StringIO()
+        formatted_df.write_csv(csv_buffer)
+        csv_content = csv_buffer.getvalue()
+        
+        logger.info(f"CSV généré: {len(formatted_df)} lignes")
+        
+        # Créer l'analyse avec le CSV
+        filename = f"tics_{len(tic_ids)}_items.csv"
+        success, message, analysis_id = exominer_service.create_analysis(
+            csv_content=csv_content,
+            filename=filename
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        logger.info(f"🚀 Lancement analyse ExoMiner depuis TIC IDs: {analysis_id}")
+        
+        # Préparer les paramètres ExoMiner avec valeurs par défaut
+        data_collection_mode = params.get('data_collection_mode', '2min')
+        num_processes = params.get('num_processes', 2)
+        num_jobs_param = params.get('num_jobs', 1)
+        download_spoc = params.get('download_spoc_data_products', True)
+        stellar_params_source = params.get('stellar_parameters_source', 'ticv8')
+        ruwe_src = params.get('ruwe_source', 'gaiadr2')
+        exominer_model = params.get('exominer_model', 'exominer++_single')
+        
+        # Lancer l'analyse immédiatement
+        success, run_message, logs = exominer_service.run_analysis(
+            analysis_id=analysis_id,
+            data_collection_mode=data_collection_mode,
+            num_processes=num_processes,
+            num_jobs=num_jobs_param,
+            model=exominer_model,
+            download_spoc_data_products=download_spoc,
+            stellar_parameters_source=stellar_params_source,
+            ruwe_source=ruwe_src
+        )
+        
+        return {
+            'success': success,
+            'message': run_message,
+            'job_id': analysis_id,
+            'tic_count': len(tic_ids),
+            'rows_generated': len(formatted_df),
+            'logs': logs[-20:] if logs else []
+        }
+            
+    except ImportError as e:
+        logger.error(f"Erreur import exominer_helper: {e}")
+        raise HTTPException(status_code=500, detail="Modules ExoMiner helper non disponibles")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur analyse depuis TIC IDs: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 @app.post("/exominer/analyze")
