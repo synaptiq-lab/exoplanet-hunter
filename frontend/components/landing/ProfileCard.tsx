@@ -57,11 +57,11 @@ const ProfileCardComponent: React.FC<ProfileCardProps> = ({
   enableMobileTilt = false,
   mobileTiltSensitivity = 5,
   miniAvatarUrl,
-  name = 'Javi A. Torres',
-  title = 'Software Engineer',
-  handle = 'javicodes',
-  status = 'Online',
-  contactText = 'Contact',
+  name = '',
+  title = '',
+  handle = '',
+  status = '',
+  contactText = '',
   showUserInfo = true,
   onContactClick
 }) => {
@@ -292,7 +292,7 @@ const ProfileCardComponent: React.FC<ProfileCardProps> = ({
                     <div className="pc-status">{status}</div>
                   </div>
                 </div>
-                <button className="pc-contact-btn" onClick={handleContactClick} type="button" aria-label={`Contact ${name || 'user'}`}>
+                <button className="pc-contact-btn" onClick={handleContactClick} type="button" aria-label={`Contact ${name || 'user'}`} style={{ pointerEvents: 'auto' }}>
                   {contactText}
                 </button>
               </div>

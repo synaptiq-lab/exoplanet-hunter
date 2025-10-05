@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-export { default } from './home/page';
-=======
 import React from 'react';
 import Layout from '@/components/Layout';
 import Hero from '@/components/landing/Hero';
@@ -18,6 +15,5 @@ const HomePage = () => {
 };
 
 export default HomePage;
->>>>>>> feat/model/exominer-implementation
 
 
