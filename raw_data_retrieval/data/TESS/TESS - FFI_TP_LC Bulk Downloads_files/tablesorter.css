@@ -1,0 +1,16 @@
+
+table tr.even td { 
+  background: #e2e9ee;
+}
+table th.headerSortDown {
+  background: #D7DDE1 url(/images/07_descending.gif) no-repeat 98% 7px;
+}
+table th.headerSortUp {
+  background: #D7DDE1 url(/images/07_ascending.gif) no-repeat 98% 5px;
+}
+.sortable th { 
+  cursor: crosshair; 
+}
+table tr.over td { 
+  background-color:#FFFF99; 
+}

@@ -1,0 +1,12 @@
+<!-- expand_retract.css -->
+<!-- original code from on online tutorial by Adam Khoury  -->
+<!-- http://www.developphp.com/view.php?tid=1269 -->
+
+p.expand{ padding:10px 200px; background:#D9ECFF; }
+div.ExpandRetract {
+	background: #97D6FB;
+	width: 700px;
+	height:0px;
+	overflow:hidden;
+}
+div.ExpandRetract > p{ padding:1px 6px; background: #97D6FB;}
