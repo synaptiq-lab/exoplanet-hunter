@@ -1,0 +1,118 @@
+.card-swap-container {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  transform: translate(5%, 20%);
+  transform-origin: bottom right;
+  perspective: 900px;
+  overflow: visible;
+}
+
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 14px;
+  background: rgba(6, 6, 10, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 0 40px rgba(120, 80, 255, 0.25);
+  transform-style: preserve-3d;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: visible;
+}
+
+/* Top tabs header above the window bar */
+.card-tab {
+  position: absolute;
+  top: -22px;
+  left: 16px;
+  height: 22px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(12, 12, 18, 0.95);
+  color: rgba(255, 255, 255, 0.9);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  box-shadow: 0 -6px 18px rgba(0,0,0,0.35), 0 0 20px rgba(120,80,255,0.35);
+  pointer-events: none; /* n'empêche pas le drag/hover de la carte */
+  z-index: 2;
+}
+
+.tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 0 6px rgba(255,255,255,0.8);
+}
+
+.tab-text {
+  font-size: 12px;
+}
+
+/* Title bar style */
+.card-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to bottom, rgba(20, 20, 28, 0.9), rgba(12, 12, 18, 0.9));
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 8px currentColor;
+}
+.dot-red { color: #ff5f57; background: #ff5f57; }
+.dot-yellow { color: #febc2e; background: #febc2e; }
+.dot-green { color: #28c840; background: #28c840; }
+
+.title-text {
+  margin-left: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.2px;
+}
+
+.card-body {
+  width: 100%;
+  height: 100%;
+  padding-top: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .card-swap-container {
+    transform: scale(0.75) translate(25%, 25%);
+  }
+}
+
+@media (max-width: 480px) {
+  .card-swap-container {
+    transform: scale(0.55) translate(25%, 25%);
+  }
+}
+
+
