@@ -3,13 +3,14 @@
 import * as React from "react";
 import MegaMenu from "@/components/ui/mega-menu";
 import type { MegaMenuItem } from "@/components/ui/mega-menu";
-import Particles from "@/components/Particles";
+import dynamic from "next/dynamic";
+const Particles = dynamic(() => import("@/components/Particles"), { ssr: false });
 import CardSwap, { Card } from "@/components/landing/CardSwap";
-import TransitSection from "@/components/landing/TransitSection";
-import About from "@/components/landing/About";
+const TransitSection = dynamic(() => import("@/components/landing/TransitSection"));
+const About = dynamic(() => import("@/components/landing/About"));
 import styles from './page.module.css';
-import TeamSection from "@/components/landing/TeamSection";
-import FadeIn from "@/components/landing/FadeIn";
+const TeamSection = dynamic(() => import("@/components/landing/TeamSection"));
+const FadeIn = dynamic(() => import("@/components/landing/FadeIn"));
 
 const LearnMorePage = () => {
   const NAV_ITEMS: MegaMenuItem[] = [

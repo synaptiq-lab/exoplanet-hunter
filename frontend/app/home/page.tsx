@@ -22,12 +22,11 @@ const LandingPage = () => {
       {/* Top nav pill */}
       <div className={styles.nav}>
         <div className={styles.brand}>
-          <span style={{ fontSize: 24 }}>✳️</span>
           <span>EXOPLANET HUNTER</span>
         </div>
         <nav className={styles.navLinks}>
           <Link href="/home" style={{ color: '#EDEDED', textDecoration: 'none' }}>Home</Link>
-          <Link href="#" style={{ color: '#EDEDED', textDecoration: 'none' }}>Docs</Link>
+          <Link href="https://github.com/synaptiq-lab/exoplanet-hunter" style={{ color: '#EDEDED', textDecoration: 'none' }}>GitHub</Link>
         </nav>
       </div>
 
@@ -52,7 +51,7 @@ const LandingPage = () => {
         {/* CTA buttons */}
         <div className={styles.ctaRow}>
           <Link
-            href="/learn-more"
+            href="/dashboard"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
