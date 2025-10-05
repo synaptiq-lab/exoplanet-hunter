@@ -17,26 +17,26 @@ const About: React.FC = () => {
   const features = [
     {
       icon: Brain,
-      title: 'Intelligence Artificielle Avancée',
-      description: 'Modèles de machine learning optimisés spécifiquement pour la détection d\'exoplanètes utilisant les dernières techniques d\'apprentissage automatique.',
+      title: 'Advanced Artificial Intelligence',
+      description: 'Machine learning models specifically optimized for exoplanet detection using the latest techniques.',
       color: 'text-blue-400'
     },
     {
       icon: Database,
-      title: 'Données NASA Officielles',
-      description: 'Accès direct aux datasets des missions Kepler, K2 et TESS avec plus de 17,000 observations astronomiques validées.',
+      title: 'Official NASA Data',
+      description: 'Direct access to datasets from the Kepler, K2, and TESS missions with over 17,000 validated astronomical observations.',
       color: 'text-green-400'
     },
     {
       icon: Zap,
-      title: 'Analyse en Temps Réel',
-      description: 'Traitement ultra-rapide de milliers d\'observations avec des résultats instantanés et des visualisations interactives.',
+      title: 'Real‑Time Analysis',
+      description: 'Ultra‑fast processing of thousands of observations with instant results and interactive visualizations.',
       color: 'text-yellow-400'
     },
     {
       icon: Target,
-      title: 'Précision Exceptionnelle',
-      description: 'Algorithmes optimisés pour minimiser les faux positifs avec une précision de 92% dans la classification des exoplanètes.',
+      title: 'Exceptional Accuracy',
+      description: 'Algorithms optimized to minimize false positives with 92% accuracy in exoplanet classification.',
       color: 'text-red-400'
     }
   ];
@@ -44,23 +44,23 @@ const About: React.FC = () => {
   const tools = [
     {
       icon: Upload,
-      title: 'Analyse de Données',
-      description: 'Téléversez vos fichiers CSV et obtenez des prédictions instantanées avec scores de confiance et explications détaillées.'
+      title: 'Data Analysis',
+      description: 'Upload your CSV files and get instant predictions with confidence scores and detailed explanations.'
     },
     {
       icon: Settings,
-      title: 'Entraînement Personnalisé',
-      description: 'Réentraînez les modèles avec vos propres données étiquetées pour améliorer les performances sur vos cas d\'usage spécifiques.'
+      title: 'Custom Training',
+      description: 'Retrain the models with your own labeled data to improve performance on your specific use cases.'
     },
     {
       icon: BarChart3,
-      title: 'Statistiques Avancées',
-      description: 'Consultez les métriques de performance détaillées : précision, recall, F1-score et évolution temporelle des modèles.'
+      title: 'Advanced Statistics',
+      description: 'View detailed performance metrics: accuracy, recall, F1‑score, and model performance over time.'
     },
     {
       icon: Eye,
-      title: 'Exploration Interactive',
-      description: 'Explorez vos datasets téléversés avec des outils de visualisation avancés et des filtres intelligents.'
+      title: 'Interactive Exploration',
+      description: 'Explore your uploaded datasets with advanced visualization tools and smart filters.'
     }
   ];
 
@@ -76,12 +76,12 @@ const About: React.FC = () => {
           viewport={{ once: true }}
         >
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Une Révolution dans la 
-            <span className="gradient-text"> Détection d'Exoplanètes</span>
+            A Revolution in 
+            <span className="gradient-text"> Exoplanet Detection</span>
           </h2>
           <p className="text-xl text-space-300 max-w-3xl mx-auto leading-relaxed">
-            Exoplanet Hunter combine l'intelligence artificielle de pointe avec les données 
-            astronomiques les plus précises pour automatiser la découverte de nouveaux mondes.
+            Exoplanet Hunter combines cutting‑edge artificial intelligence with the most precise astronomical
+            data to automate the discovery of new worlds.
           </p>
         </motion.div>
 
@@ -119,20 +119,19 @@ const About: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <h3 className="text-3xl font-bold text-white mb-6">
-                La Méthode du Transit
+                The Transit Method
               </h3>
               <p className="text-space-300 mb-6 leading-relaxed">
-                Notre IA analyse les courbes de lumière stellaire pour détecter les baisses 
-                de luminosité caractéristiques du passage d'une planète devant son étoile. 
-                Cette méthode, utilisée par les missions Kepler et TESS, permet d'identifier 
-                des exoplanètes avec une précision remarquable.
+                Our AI analyzes stellar light curves to detect brightness dips characteristic of a planet passing
+                in front of its star. This method, used by the Kepler and TESS missions, makes it possible to
+                identify exoplanets with remarkable precision.
               </p>
               <div className="space-y-3">
                 {[
-                  'Détection automatique des transits',
-                  'Analyse des paramètres orbitaux',
-                  'Classification intelligente des signaux',
-                  'Validation par apprentissage automatique'
+                  'Automatic transit detection',
+                  'Orbital parameter analysis',
+                  'Intelligent signal classification',
+                  'Validation via machine learning'
                 ].map((item, index) => (
                   <motion.div
                     key={index}
@@ -159,17 +158,17 @@ const About: React.FC = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-primary-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
-                  <h4 className="text-xl font-semibold text-white mb-2">
-                    Variables Analysées
-                  </h4>
+                <h4 className="text-xl font-semibold text-white mb-2">
+                  Analyzed Variables
+                </h4>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     {[
-                      'Période orbitale',
-                      'Durée du transit',
-                      'Profondeur du signal',
-                      'Rayon planétaire',
-                      'Température stellaire',
-                      'Masse stellaire'
+                    'Orbital period',
+                    'Transit duration',
+                    'Signal depth',
+                    'Planetary radius',
+                    'Stellar temperature',
+                    'Stellar mass'
                     ].map((variable, index) => (
                       <div key={index} className="text-space-400 bg-space-700/50 rounded px-2 py-1">
                         {variable}
@@ -190,7 +189,7 @@ const About: React.FC = () => {
           viewport={{ once: true }}
         >
           <h3 className="text-3xl font-bold text-white text-center mb-12">
-            Outils Professionnels Intégrés
+            Integrated Professional Tools
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

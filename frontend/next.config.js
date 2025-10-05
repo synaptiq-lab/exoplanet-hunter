@@ -2,6 +2,20 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  async redirects() {
+    return [
+      {
+        source: '/en-savoir-plus',
+        destination: '/learn-more',
+        permanent: true,
+      },
+      {
+        source: '/en-savoir-plus/:path*',
+        destination: '/learn-more',
+        permanent: true,
+      },
+    ]
+  },
   async rewrites() {
     return [
       {

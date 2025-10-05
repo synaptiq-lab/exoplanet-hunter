@@ -52,7 +52,7 @@ const LandingPage = () => {
         {/* CTA buttons */}
         <div className={styles.ctaRow}>
           <Link
-            href="/en-savoir-plus"
+            href="/learn-more"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -69,7 +69,7 @@ const LandingPage = () => {
             Get Started
           </Link>
           <Link
-            href="/en-savoir-plus"
+            href="/learn-more"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
