@@ -1,0 +1,81 @@
+//
+// input_hide2.js
+//
+// function input_hide2 finds input tags with ID Button1 or Button2
+// and when one is clicked will hide the corresponding div entry with name hide1,
+// hide2.
+// Commands are written using jquery.
+//
+
+  function input_hide()
+  {
+      var inputs = $("input[id^='toggleButton']");
+      var count = inputs.length;
+      if (count == 1) {
+         $("#hide_on_load").hide();
+         $('#toggleButton').click(function(){
+            if($('#hide_on_load').is(':visible')) {
+              $('#hide_on_load').hide();
+            } else { $('#hide_on_load').show(); }
+          });
+      } else {
+         $('div[id^="hide_on_load"]').hide();
+         $('input[id^="toggle"]').click(function(){
+            if($('div[id^="hide_on_load"]').is(':visible')) {
+              $('div[id^="hide_on_load"]').hide();
+            } else { $('div[id^="hide_on_load"]').show(); }
+          });
+      }
+
+      var inputs = $("input[id^='Button1']");
+      var count = inputs.length;
+      if (count == 1) {
+        $("#hide1").hide();
+        $('#Button1').click(function(){
+           if($('#hide1').is(':visible')) {
+             $('#hide1').hide();
+           } else { $('#hide1').show(); }
+         });
+      }
+      var inputs = $("input[id^='Button2']");
+      var count = inputs.length;
+      if (count == 1) {
+        $("#hide2").hide();
+        $('#Button2').click(function(){
+           if($('#hide2').is(':visible')) {
+             $('#hide2').hide();
+           } else { $('#hide2').show(); }
+         });
+      }
+  }
+  function input_show()
+  {
+      var inputs = $("input[id^='Button3']");
+      var count = inputs.length;
+      if (count == 1) {
+         $("#show1").show();
+         $('#Button3').click(function(){
+            if($('#show1').is(':visible')) {
+              $('#show1').hide();
+            } else { $('#show1').show(); }
+          });
+      } 
+      var inputs = $("input[id^='Button4']");
+      var count = inputs.length;
+      if (count == 1) {
+         $("#show2").show();
+         $('#Button4').click(function(){
+            if($('#show2').is(':visible')) {
+              $('#show2').hide();
+            } else { $('#show2').show(); }
+          });
+      } 
+  }
+
+
+$(document).ready(function()
+   {
+   input_hide();
+   input_show();
+   }
+);
