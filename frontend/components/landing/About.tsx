@@ -18,25 +18,25 @@ const About: React.FC = () => {
     {
       icon: Brain,
       title: 'Advanced Artificial Intelligence',
-      description: 'Machine learning models specifically optimized for exoplanet detection using the latest techniques.',
+      description: 'Cutting-edge machine learning architectures — from feature-based LightGBM baselines to physics-informed Transformers and CNNs — designed to detect exoplanets from raw light curves with unparalleled robustness and interpretability.',
       color: 'text-blue-400'
     },
     {
       icon: Database,
       title: 'Official NASA Data',
-      description: 'Direct access to datasets from the Kepler, K2, and TESS missions with over 17,000 validated astronomical observations.',
+      description: 'Direct access to high-quality datasets from the Kepler, K2, and TESS missions via MAST, including over 17,000 validated light curves preprocessed by sector and ID for precise stellar signal recovery.',
       color: 'text-green-400'
     },
     {
       icon: Zap,
       title: 'Real‑Time Analysis',
-      description: 'Ultra‑fast processing of thousands of observations with instant results and interactive visualizations.',
+      description: 'Instant evaluation of stellar objects using their light curves and IDs to determine exoplanet likelihood, complete with interactive reports, confidence intervals, and calibrated probability estimates.',
       color: 'text-yellow-400'
     },
     {
       icon: Target,
       title: 'Exceptional Accuracy',
-      description: 'Algorithms optimized to minimize false positives with 92% accuracy in exoplanet classification.',
+      description: 'State-of-the-art algorithms inspired by NASA’s ExoMiner and enhanced with Transformer-based architectures built from scratch, achieving up to 92 % accuracy while minimizing false positives in exoplanet detection.',
       color: 'text-red-400'
     }
   ];
@@ -59,8 +59,8 @@ const About: React.FC = () => {
     },
     {
       icon: Eye,
-      title: 'Interactive Exploration',
-      description: 'Explore your uploaded datasets with advanced visualization tools and smart filters.'
+      title: 'Three treatment methods',
+      description: 'TSFRESH + Multi-View Transformer (Time-Series Model) -- ExoMiner (Deep Learning, State-of-the-Art) -- XGBoost Ensemble Model (Tabular Model)'
     }
   ];
 
@@ -216,6 +216,85 @@ const About: React.FC = () => {
                 </div>
               </motion.div>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Models: Detailed Overview */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: true }}
+          className="space-y-8 mt-16"
+        >
+          <h3 className="text-3xl font-bold text-white text-center">
+            Models: Detailed Overview
+          </h3>
+
+          <div className="p-6 bg-space-800/20 rounded-xl border border-space-700">
+            <h4 className="text-2xl font-semibold text-white mb-2">🪐 1. TSFRESH + Multi-View Transformer (Time-Series Model)</h4>
+            <p className="text-space-300"><strong>Data Type</strong>: Light curves (raw flux over time)</p>
+            <p className="text-space-300 mt-3">
+              <strong>Description</strong>: This model processes the temporal brightness variations of stars recorded by TESS or Kepler. It combines TSFRESH (feature extraction) and a Multi-View Transformer (global/folded/local views) and fuses representations to detect true transits.
+            </p>
+            <p className="text-space-300 mt-3">
+              <strong>Innovation</strong>: Hybrid interpretability + attention with uncertainty calibration.
+            </p>
+          </div>
+
+          <div className="p-6 bg-space-800/20 rounded-xl border border-space-700">
+            <h4 className="text-2xl font-semibold text-white mb-2">🚀 2. ExoMiner (Deep Learning, State-of-the-Art) - septober 2025 last version</h4>
+            <p className="text-space-300"><strong>Data Type</strong>: Light curves (processed) + stellar metadata</p>
+            <p className="text-space-300 mt-3">
+              <strong>Description</strong>: NASA's CNN trained on Kepler, analyzing phase‑folded curves to separate true planets from false positives.
+            </p>
+            <p className="text-space-300 mt-3">
+              <strong>Innovation</strong>: SoTA validation accuracy, explainability, operational usage on Kepler/TESS.
+            </p>
+          </div>
+
+          <div className="p-6 bg-space-800/20 rounded-xl border border-space-700">
+            <h4 className="text-2xl font-semibold text-white mb-2">💡 3. XGBoost Ensemble Model (Tabular Model)</h4>
+            <p className="text-space-300"><strong>Data Type</strong>: Tabular KOI features (stellar + orbital)</p>
+            <p className="text-space-300 mt-3">
+              <strong>Description</strong>: Ensemble ML (XGBoost/Random Forest/Stacking) on precomputed features; fast, interpretable baseline.
+            </p>
+            <p className="text-space-300 mt-3">
+              <strong>Innovation</strong>: &gt;83% accuracy with tuned hyperparameters; efficient and transparent.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border border-space-700/40 rounded-lg overflow-hidden">
+              <thead>
+                <tr className="bg-space-800/40">
+                  <th className="py-3 px-4 text-space-300 font-semibold">Model</th>
+                  <th className="py-3 px-4 text-space-300 font-semibold">Data Type</th>
+                  <th className="py-3 px-4 text-space-300 font-semibold">Core Approach</th>
+                  <th className="py-3 px-4 text-space-300 font-semibold">Innovation / Strength</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-space-700/40">
+                  <td className="py-3 px-4 text-white">TSFRESH + Transformer</td>
+                  <td className="py-3 px-4 text-space-300">Light curves (raw)</td>
+                  <td className="py-3 px-4 text-space-300">Hybrid stats + deep sequential</td>
+                  <td className="py-3 px-4 text-space-300">Multi‑view attention; feature extraction; uncertainty</td>
+                </tr>
+                <tr className="border-t border-space-700/40">
+                  <td className="py-3 px-4 text-white">ExoMiner</td>
+                  <td className="py-3 px-4 text-space-300">Light curves (folded)</td>
+                  <td className="py-3 px-4 text-space-300">Deep CNN (NASA)</td>
+                  <td className="py-3 px-4 text-space-300">SoTA accuracy; explainability</td>
+                </tr>
+                <tr className="border-t border-space-700/40">
+                  <td className="py-3 px-4 text-white">XGBoost Ensemble</td>
+                  <td className="py-3 px-4 text-space-300">Tabular KOI</td>
+                  <td className="py-3 px-4 text-space-300">Gradient boosting</td>
+                  <td className="py-3 px-4 text-space-300">Interpretable; efficient</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </motion.div>
       </div>
