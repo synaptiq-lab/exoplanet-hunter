@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { 
@@ -11,8 +11,10 @@ import {
   Sparkles,
   Download,
   FileText,
-  Star
+  Star,
+  Cpu
 } from 'lucide-react';
+import { apiClient } from '@/lib/api';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 
 interface ProcessingStage {
@@ -27,6 +29,35 @@ export default function AnalyzePage() {
   const [stages, setStages] = useState<ProcessingStage[]>([]);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string>('');
+  
+  // États pour la gestion des modèles localStorage
+  const [analysisMode, setAnalysisMode] = useState<'auto' | 'saved'>('auto');
+  const [availableModels, setAvailableModels] = useState<Record<string, any>>({});
+  const [selectedModel, setSelectedModel] = useState<string>('');
+
+  // Charger les modèles localStorage disponibles
+  useEffect(() => {
+    const localModels: Record<string, any> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('exoplanet_model_')) {
+        try {
+          const modelData = JSON.parse(localStorage.getItem(key)!);
+          const formatType = key.replace('exoplanet_model_', '');
+          localModels[formatType] = modelData;
+        } catch (error) {
+          console.warn(`Erreur parsing modèle localStorage ${key}:`, error);
+        }
+      }
+    }
+    setAvailableModels(localModels);
+    
+    // Sélectionner le premier modèle par défaut s'il y en a un
+    const firstModel = Object.keys(localModels)[0];
+    if (firstModel && !selectedModel) {
+      setSelectedModel(firstModel);
+    }
+  }, [selectedModel]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -36,55 +67,85 @@ export default function AnalyzePage() {
     setResults(null);
     setIsProcessing(true);
 
-    // Initialiser les étapes
-    setStages([
-      { id: 'upload', label: '📤 Upload et validation', status: 'processing' },
-      { id: 'train', label: '🧠 Entraînement du modèle', status: 'pending' },
-      { id: 'validate', label: '🔍 Validation des planètes', status: 'pending' },
-      { id: 'results', label: '✨ Résultats', status: 'pending' }
-    ]);
+    // Configuration des étapes selon le mode
+    if (analysisMode === 'auto') {
+      setStages([
+        { id: 'upload', label: '📤 Upload et validation', status: 'processing' },
+        { id: 'train', label: '🧠 Entraînement du modèle', status: 'pending' },
+        { id: 'validate', label: '🔍 Validation des planètes', status: 'pending' },
+        { id: 'results', label: '✨ Résultats', status: 'pending' }
+      ]);
+    } else {
+      setStages([
+        { id: 'upload', label: '📤 Upload et validation', status: 'processing' },
+        { id: 'load', label: '🔄 Chargement du modèle', status: 'pending' },
+        { id: 'validate', label: '🔍 Validation des planètes', status: 'pending' },
+        { id: 'results', label: '✨ Résultats', status: 'pending' }
+      ]);
+    }
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       // Simuler la progression visuelle pendant le traitement backend
-      // Upload complété après 1.5s
       const uploadSimulation = setTimeout(() => {
         updateStage('upload', 'completed', 'CSV validé et analysé');
       }, 1500);
 
-      // Train démarre après 2s et reste en "processing" jusqu'à la réponse
-      const trainSimulation = setTimeout(() => {
-        updateStage('train', 'processing', 'Entraînement du modèle en cours...');
-      }, 2000);
+      let response;
+      if (analysisMode === 'auto') {
+        // Mode automatique - entraînement nouveau
+        const trainSimulation = setTimeout(() => {
+          updateStage('train', 'processing', 'Entraînement du modèle en cours...');
+        }, 2000);
 
-      // Pas de completion automatique du train - on attend la vraie réponse
+        response = await fetch('http://localhost:8000/analyze', {
+          method: 'POST',
+          body: formData
+        });
 
-      // Appel à l'endpoint unique qui fait tout
-      const response = await fetch('http://localhost:8000/analyze', {
-        method: 'POST',
-        body: formData
-      });
+        clearTimeout(trainSimulation);
 
-      // Annuler les simulations
+        if (response.ok) {
+          const data = await response.json();
+          updateStage('upload', 'completed', `${data.csv_info.format_name} - ${data.csv_info.row_count} objets`);
+          updateStage('train', 'completed', `Précision: ${(data.training.accuracy * 100).toFixed(1)}%`);
+          updateStage('validate', 'completed', `${data.validation.analysis_summary.confirmed_count} planètes confirmées`);
+          updateStage('results', 'completed');
+          setResults(data);
+        }
+      } else {
+        // Mode avec modèle sauvegardé
+        formData.append('format_type', selectedModel);
+
+        const loadSimulation = setTimeout(() => {
+          updateStage('load', 'processing', `Chargement du modèle ${selectedModel}...`);
+        }, 2000);
+
+        response = await fetch('http://localhost:8000/analyze/withModel', {
+          method: 'POST',
+          body: formData
+        });
+
+        clearTimeout(loadSimulation);
+
+        if (response.ok) {
+          const data = await response.json();
+          updateStage('upload', 'completed', `${data.csv_info.detected_format_name} - ${data.csv_info.total_rows} objets`);
+          updateStage('load', 'completed', `Modèle ${data.model_format} chargé`);
+          updateStage('validate', 'completed', `${data.validation.analysis_summary.confirmed_count} planètes confirmées`);
+          updateStage('results', 'completed');
+          setResults(data);
+        }
+      }
+
       clearTimeout(uploadSimulation);
-      clearTimeout(trainSimulation);
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Erreur lors de l\'analyse');
       }
-
-      const data = await response.json();
-      
-      // Mettre à jour les étapes avec les vraies données
-      updateStage('upload', 'completed', `${data.csv_info.format_name} - ${data.csv_info.row_count} objets`);
-      updateStage('train', 'completed', `Précision: ${(data.training.accuracy * 100).toFixed(1)}%`);
-      updateStage('validate', 'completed', `${data.validation.analysis_summary.confirmed_count} planètes confirmées`);
-      updateStage('results', 'completed');
-      
-      setResults(data);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -95,7 +156,7 @@ export default function AnalyzePage() {
     } finally {
       setIsProcessing(false);
     }
-  }, [stages]);
+  }, [stages, analysisMode, selectedModel]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -169,6 +230,104 @@ export default function AnalyzePage() {
             Détection automatique d'exoplanètes par IA
           </p>
         </motion.div>
+
+        {/* Mode Selection */}
+        {!isProcessing && !results && !error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="card p-6 mb-6"
+          >
+            <h3 className="text-xl font-semibold text-white mb-4">Mode d'analyse</h3>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Mode automatique */}
+              <div 
+                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  analysisMode === 'auto' 
+                    ? 'border-primary-500 bg-primary-500/10' 
+                    : 'border-space-600 hover:border-primary-500'
+                }`}
+                onClick={() => setAnalysisMode('auto')}
+              >
+                <div className="flex items-center space-x-3 mb-2">
+                  <Sparkles className={`h-6 w-6 ${analysisMode === 'auto' ? 'text-primary-400' : 'text-space-400'}`} />
+                  <h4 className="text-lg font-semibold text-white">Mode automatique</h4>
+                  {analysisMode === 'auto' && (
+                    <CheckCircle className="h-5 w-5 text-primary-400 ml-auto" />
+                  )}
+                </div>
+                <p className="text-space-400 text-sm mb-3">
+                  Entraîne automatiquement un nouveau modèle sur votre dataset
+                </p>
+                <div className="text-xs text-space-500">
+                  ✅ Entraînement automatique<br />
+                  ✅ Optimal pour nouveaux formats<br />
+                  ⏱️ Plus lent (entraînement inclus)
+                </div>
+              </div>
+
+              {/* Mode sauvegardé */}
+              <div 
+                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  analysisMode === 'saved' 
+                    ? 'border-primary-500 bg-primary-500/10' 
+                    : 'border-space-600 hover:border-primary-500'
+                }`}
+                onClick={() => setAnalysisMode('saved')}
+              >
+                <div className="flex items-center space-x-3 mb-2">
+                  <Cpu className={`h-6 w-6 ${analysisMode === 'saved' ? 'text-primary-400' : 'text-space-400'}`} />
+                  <h4 className="text-lg font-semibold text-white">Modèle sauvegardé</h4>
+                  {analysisMode === 'saved' && (
+                    <CheckCircle className="h-5 w-5 text-primary-400 ml-auto" />
+                  )}
+                </div>
+                <p className="text-space-400 text-sm mb-3">
+                  Utilise un modèle entraîné préalablement et sauvegardé
+                </p>
+                <div className="text-xs text-space-500">
+                  ⚡ Plus rapide (pas d'entraînement)<br />
+                  🔄 Réutilise vos modèles<br />
+                  ⚠️ Nécessite un modèle compatible
+                </div>
+              </div>
+            </div>
+
+            {/* Sélectionneur de modèle si mode sauvegardé */}
+            {analysisMode === 'saved' && (
+              <div className="mt-6 p-4 bg-space-700/30 rounded-lg">
+                <label className="block text-white font-medium mb-2">
+                  Modèle à utiliser :
+                </label>
+                {Object.keys(availableModels).length > 0 ? (
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full p-3 bg-space-800 border border-space-600 rounded-lg text-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500"
+                  >
+                    {Object.entries(availableModels).map(([formatType, modelData]) => (
+                      <option key={formatType} value={formatType}>
+                        Modèle {formatType} ({modelData.metadata?.feature_columns?.length || 0} features)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <AlertCircle className="h-5 w-5 text-yellow-400 mb-2" />
+                    <p className="text-yellow-400 text-sm">
+                      Aucun modèle sauvegardé trouvé. 
+                      <br />
+                      <span className="text-space-400 mt-1">
+                        Allez sur <strong>"Mes Modèles"</strong> pour télécharger un modèle depuis le serveur.
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
 
         {/* Upload Zone (visible si pas de traitement en cours et pas de résultats) */}
         {!isProcessing && !results && !error && (

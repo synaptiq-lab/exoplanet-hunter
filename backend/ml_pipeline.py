@@ -388,5 +388,38 @@ class ExoplanetMLPipeline:
             logger.error(f"Erreur lors du chargement du modèle: {e}")
             return False
 
+    def load_model_from_json(self, model_json: Dict[str, Any], feature_columns: List[str]):
+        """
+        Charge un modèle depuis un JSON localStorage (sans fichiers)
+        
+        Args:
+            model_json: Dictionnaire JSON du modèle
+            feature_columns: Liste des colonnes de features utilisées lors de l'entraînement
+        """
+        try:
+            # Créer un modèle temporaire depuis le JSON
+            temp_model_path = "temp_model.json"
+            with open(temp_model_path, 'w') as f:
+                json.dump(model_json, f)
+            
+            # Charger le modèle depuis le JSON
+            self.model = xgb.XGBClassifier()
+            self.model.load_model(temp_model_path)
+            
+            # Configurer les métadonnées
+            self.feature_columns = feature_columns
+            self.trained = True
+            
+            # Nettoyer le fichier temporaire
+            os.remove(temp_model_path)
+            
+            logger.info(f"Modèle chargé depuis localStorage - {len(feature_columns)} features")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Erreur lors du chargement du modèle depuis JSON: {e}")
+            return False
+
 # Instance globale
 ml_pipeline = ExoplanetMLPipeline()
