@@ -46,8 +46,18 @@ if __name__ == "__main__":
     )
 
     # Define priority mapping (lower number = higher priority)
-    priority = ["KP", "APC", "PC", "CP", "FP", "EB", "FA"]
+    priority = ["KP", "CP", "APC", "PC", "EB", "FP", "FA"]
     priority_map = {val: idx for idx, val in enumerate(priority)}
+
+    dispositions_mapping = {
+        "KP": "Known planet",
+        "CP": "Confirmed planet",
+        "APC": "Ambiguous planetary candidate",
+        "PC": "Planetary candidate",
+        "EB": "Eclipsing Binary",
+        "FP": "False positive",
+        "FA": "False alarm"
+    }
 
     result = (
         toi_nasa_df
@@ -64,6 +74,7 @@ if __name__ == "__main__":
             .when(pl.col("priority_left") <= pl.col("priority_right"))
             .then(pl.col("TOI Disposition"))
             .otherwise(pl.col("TOI Disposition_right"))
+            .replace(dispositions_mapping)
             .alias("TOI Disposition")
         )
         .drop(["TIC_right", "TOI Disposition_right", "priority_left", "priority_right"])
