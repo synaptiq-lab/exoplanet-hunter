@@ -1,0 +1,38 @@
+
+/* Sorting */
+th.table-sortable {
+  cursor:pointer;
+  background-image:none;
+  background-position:center left;
+  background-repeat:no-repeat;
+  padding-left:12px;
+}
+th.table-sorted-asc {
+  background-image:url("/images/07_ascending.gif");
+  background-position:center left;
+  background-repeat:no-repeat;
+}
+th.table-sorted-dec {
+  background-image:url("/images/07_descending.gif");
+  background-position:center left;
+  background-repeat:no-repeat;
+}
+
+/* Sort table Icon style */
+table.sort01 th.table-sortable { background-image:none }
+table.sort01 th.table-sorted-asc { background-image:url("/images/07_ascending.gif"); }
+table.sort01 th.table-sorted-desc { background-image:url("/images/07_descending.gif"); }
+
+/* style for table headers */
+
+table.sort01 th {
+   background-color: #73CCE0;
+   color: #000066;
+}
+
+/* striping class */
+
+.alternate {
+  background-color: #C9E9E6;
+  color: #000000;
+}

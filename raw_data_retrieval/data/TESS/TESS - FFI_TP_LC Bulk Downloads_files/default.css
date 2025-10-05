@@ -1,0 +1,446 @@
+
+/* Global style */
+body {
+    margin-left: 0px;
+    margin-top: 0px;
+    margin-right: 0px;
+    margin-bottom: 0px;
+    background-color: #444444;
+}
+.style1 {font-family: Arial, Helvetica, sans-serif; color: #FFFFFF; }
+.style2 {font-size: 30px; font-weight: bold; }
+.style20 {font-weight: bold; }
+.style3 {font-size: 15px}
+.style4 {font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000000; }
+.style41 {font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000000; font-weight: bold; }
+.style5 {font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.style50 {padding-left:5px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.style51 {padding-left:15px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; }
+.style11 {font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #FFFFFF; }
+.style61 {font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: bold;}
+.style6 {font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #000066; }
+.style7 {color: #FFFFFF; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.style8 {color: #FFFFFF; font-family: Arial, Helvetica, sans-serif; font-size: 10px; }
+
+a.style60:link { color: #FFFFFF; text-decoration: none; }
+a.style60:visited { color: #FFFFFF; text-decoration: none; }
+a.style60:hover { font-weight:bold; }
+
+/* Top Banner of all MAST pages */
+table.tbanner {
+   width: 100%; 
+   border: 0;
+   padding: 0;
+}
+.tbcolor {
+  color: #000000;
+  background-color: #000000;
+} 
+
+
+/* whats new background colors (div id) */
+/* news1 is date, news2 is news item heading */
+
+#newsnav ul { 
+  margin: 0;
+  padding: 0 0; 
+  margin-left: 0; 
+  padding-top: 0; 
+  width: 100%;
+}
+#newsnav ul li { 
+  list-style: none; 
+  margin: 0px;
+  padding: 2px 5px 2px 5px;
+  display: block; 
+}
+#newsnav ul li a {
+  padding: 0px 0px 0px 0px;
+  color: #000000;
+  text-decoration: none;
+}
+#newsnav a:link, #newsnav a:visited { color: #000000; }
+#newsnav a:hover { font-weight: bold; color: #000000; } 
+#newsnav li:hover { color: #000000; font-weight: bold; }
+
+.news1 {background-color: #ECC87A; } 
+.news2 {background-color: #F4E1BA; } 
+
+/* left menu background colors (id) */
+/* and mouse actions */
+/* Note: entries could be centered if line-height */
+/* = height, but text can't wrap well */
+/*  border-bottom: #ECC87A solid;
+  border-top: #ECC87A solid;
+  border: 0px solid #ECC87A;
+    margin: 2px 1px; 0px; 0px; 
+*/
+
+img.lnb-arrow {
+    margin-top: 2px;
+    margin-right: 1px;
+    float: right;
+    width: 12px;
+    height: 16px;
+}
+
+#lnbclass ul { margin: 0px; padding: 0px; }
+#lnbclass li { list-style: none; }
+ul.lnb-top { background-color: #9D9B86; }
+ul.lnb-top li { 
+  border-bottom: #ECC87A solid;
+  border-right: none;
+  border-left: none;
+  border-width: 1px;
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: 7px 0px 7px 0px;
+}
+li.lnb-form1 {
+  text-align: center;
+  line-height: 5px;
+}
+#lnbclass a {
+ color: #000;
+ height: 34px;
+ padding: 5px 0px 5px 5px;
+ line-height: 17px;
+ text-indent: 5px;                   
+ text-decoration: none;
+ width: 100%;
+}
+#lnbclass li:hover {
+ background: #F4E1BA;
+ position: relative;
+ font-weight: bold;
+}
+
+ul.lnb-sub1 { display: none; }
+li:hover .lnb-sub1 {
+  background: #9D9B86;
+  border: #fff solid;
+  border-width: 0px;
+  display: block;
+  position: absolute;
+  left: 150px;
+  top: 0px;
+  font-weight: normal;
+}
+ul.lnb-sub1 li {
+  border-right: none;
+  border-left: none;
+  border-bottom: #ECC87A solid;
+  border-width: 1px;
+    float:left;
+    height: 17px;
+    width: 170px;
+  font-weight: normal;
+}
+ul.lnb-sub1 a {
+ text-indent: 2px;                   
+}
+
+
+.leftMenu {width: 150px; background-color: #9D9B86; }
+#leftMenu {background-color: #9D9B86; }
+.lmcolor {background-color: #ECC87A; }
+
+a.leftnavlink:link { color: #000000; text-decoration: none; }
+a.leftnavlink:visited { color: #000000; text-decoration: none; }
+a.leftnavlink:hover { font-weight:bold; }
+
+/* right menu background colors (color) */
+/* rmcolor is main headings, even & odd mission rows alternate color */
+/* note: using height in ul didn't work in windows */
+/* rmcolor used in footer as well */
+
+.rightMenu {width: 155px; background-color: #827259; }
+.rmcolor {background-color: #827259; }
+
+#missclass ul { 
+  margin: 0;
+  padding: 0 0; 
+  margin-left: 0; 
+  padding-top: 0; 
+  width: 150px;
+}
+#missclass ul li { 
+  list-style: none; 
+  margin: 0px;
+  padding: 3px 6px 2px 6px;
+  display: block; 
+}
+#missclass ul li a {
+  padding: 0px 0px 0px 0px;
+  text-decoration: none;
+}
+
+.miss_even { background-color: #DCCCAA; }
+.miss_even:link { color: #000000; text-decoration: none; }
+.miss_even:visited { color: #DCCCAA; text-decoration: none; }
+.miss_even:hover { font-weight:bold; background-color: #FFFFCC;}
+.miss_odd { background-color: #ECE4D3; }
+.miss_odd:link { color: #000000; text-decoration: none; }
+.miss_odd:visited { color: #ECE4D3; text-decoration: none; }
+.miss_odd:hover { font-weight:bold; background-color: #FFFFCC;}
+
+/* Mission search forms */
+/* mission specific portions & general background color class */
+/* search buttons background color */
+/* tncolor used in footer as well */
+
+table.tn5 {width: 100%; padding: 0px; border: none; border-collapse: collapse;}
+table.m5 {width: 760px; padding: 0px; border: none; border-collapse: collapse;}
+table.Mspecific {background-color: #ECE4D3; 
+   width: 100%; padding: 0px; border: none; border-collapse: collapse;}
+.mscolor {background-color: #ECE4D3;} 
+.sbcolor {background-color: #77AAD0;} 
+
+/* background images for top MAST-wide bar (class) */
+/* and mouse action colors */
+
+table.topnavcolor {background-image: url(/images/topnav.bg.gif); }
+a.topnavlink:link { color: #000000; text-decoration: none; }
+a.topnavlink:visited { color: #000000; text-decoration: none; }
+a.topnavlink:hover { font-weight:bold; }
+.tncolor {background-color: #77AAD0;} 
+.tnborder {background-color: #FFFFFF;} 
+
+/* top bar using new unordered lists */
+/* class tnb-top                     */
+/* class tnb-arrow for arrow image   */
+/*    margin: 0px 4px; 0px; 0px;     */
+
+img.tnb-arrow {
+    margin-right: 4px;
+    width: 12px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+ul.tnb-top {
+  margin: 0;
+  padding: 0 0; 
+  margin-left: 0; 
+  padding-top: 0; 
+  line-height:140%;
+  background-color: #77AAD0;
+}
+ul.tnb-top li { 
+  list-style: none; 
+  margin: 0;
+  padding: 3px 0px 3px 0px;
+  display: inline;
+  border: 1px solid #000000;
+  border-top: none;
+  border-left: none;
+  border-bottom: none;
+  white-space: nowrap;
+  position: relative;
+}
+ul.tnb-top li a { 
+  padding: 3px 8px 3px 8px;
+  color: #000000;
+  margin-right: 3px; 
+  text-decoration: none;
+}
+#uppernav a:link, #lowernav a:visited { color: #000000; }
+#uppernav a:hover { font-weight: bold; color: #000000; background-color: #F4E1BA; } 
+#uppernav li:hover { color: #000000; font-weight: bold; background-color: #F4E1BA; }
+
+ul.tnb-sub1 { display: none; }
+li:hover .tnb-sub1{
+  background: #77AAD0;
+  display: block;
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border-width: 1px;
+  left: 0px;
+  top: 100%;
+  font-weight: normal;
+  line-height:85%;
+}
+ul.tnb-sub1 li {
+  font-weight: normal;
+  margin: 0;
+  border: none;
+}
+ul.tnb-sub1 a {
+  border: #000000 solid;
+  margin: 0;
+  border-width: 1px;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  display: block;
+  text-indent: 2px;
+}
+
+/*  margin: none; */
+
+/* background images for mission bar (class) */
+/* (no mouseactions) */
+/* & new method for hndling mission bar (div with id) */
+
+table.lowernavcolor {background-color: #DCCCAA; }
+td.lowernav {background-color: #DCCCAA; }
+
+#lowernav ul { 
+  margin: 0;
+  padding: 0 0; 
+  margin-left: 0; 
+  padding-top: 0; 
+  line-height:150%;
+  background-color: #DCCCAA;
+}
+#lowernav ul li { 
+  list-style: none; 
+  margin: 0px;
+  padding: 3px 0px 3px 0px;
+  display: inline; 
+  border: 1px solid #000000;
+  border-top: none;
+  border-left: none;
+  border-bottom: none;
+}
+#lowernav ul li a {
+  padding: 3px 8px 3px 8px;
+  color: #000000;
+  margin-right: 3px; 
+  text-decoration: none;
+}
+#lowernav a:link, #lowernav a:visited { color: #000000; }
+#lowernav a:hover { font-weight: bold; color: #000000; background-color: #F4E1BA; } 
+#lowernav li:hover { color: #000000; font-weight: bold; background-color: #F4E1BA; }
+
+
+
+/* footer */
+
+#footernav ul { 
+  margin: 0;
+  padding: 3px 5px 3px 25px; 
+  margin-left: 0; 
+  padding-top: 0; 
+  line-height:100%;
+}
+#footernav ul li { 
+  list-style: none; 
+  margin: 0px;
+  padding: 0px 0px 3px 0px;
+  display: inline; 
+}
+#footernav ul li a {
+  padding: 3px 8px 3px 8px;
+  color: #FFFFFF;
+  margin-right: 3px; 
+  text-decoration: none;
+}
+#footernav a:link, #footernav a:visited { color: #FFFFFF; }
+#footernav a:hover { font-weight: bold; color: #FFFFFF; } 
+#footernav li:hover { color: #FFFFFF;  }
+
+
+/* FFI form (div id to hide form elements) */
+#hide_these_fields { 
+  display:none; 
+} 
+#new_tr1 { display:none; }
+#new_tr2 { display:none; }
+#new_tr3 { display:none; }
+#new_tr4 { display:none; }
+
+
+td.padding {padding-left:5px; }
+hr.hide { color: #FFFFFF; }
+
+/* allows red text */
+.comment {
+   color: #ee3e80;
+}
+/* dark blue bold text for user survey */
+.survey_q {
+   color: #000066;
+   font-weight: bold; 
+}
+
+/* survey textarea styling */
+.survey_smtextarea {
+   width: 600px;
+   height: 60px;
+   font-size: 16px;
+   padding: 5px;
+}
+.survey_lrgtextarea {
+   width: 600px;
+   height: 120px;
+   font-size: 16px;
+   padding: 5px;
+}
+
+/* survey tables */ 
+.survey_table0 {
+   border: 0px;
+   padding: 0px;
+   border-spacing: 0px;
+}
+
+/* survey submit button */
+.sb {
+    text-align: center;
+}
+.ssb {
+    color: #FFFFFF; 
+    font-family: Arial, Helvetica, sans-serif; 
+    text-align: center;
+    line-height: 50px;
+    font-size: 24px; 
+    font-weight: bold; 
+    background-color: #77AAD0; 
+}
+.ssbh:hover {
+    background-color: #000000; 
+}
+
+/* style images (Myrons color plots) */
+
+img.align-center {
+   display: block;
+   margin: 0px auto;
+}
+img.small_msmith {
+   width: 180px;
+   height: 120px;
+}
+
+
+.hidden {
+   position:absolute; 
+   left:0px;
+   top:-500px;
+   width:1px;
+   height:1px;
+   overflow:hidden;
+} 
+#skip a, #skip a:hover, #skip a:visited  
+{ 
+ position:absolute; 
+ left:0px; 
+ top:-500px; 
+ width:1px; 
+ height:1px; 
+ overflow:hidden;
+} 
+  
+#skip a:active 
+{ 
+ position:static; 
+ width:auto; 
+ height:auto; 
+} 
+
+/* hide and show styles */
+
+#indt {padding: 0px 20px 0px 20px; font-size: 14px; font-family: Arial, Helvetica, sans-serif; }
+#indt2 {font-size: 14px; font-family: Arial, Helvetica, sans-serif; }

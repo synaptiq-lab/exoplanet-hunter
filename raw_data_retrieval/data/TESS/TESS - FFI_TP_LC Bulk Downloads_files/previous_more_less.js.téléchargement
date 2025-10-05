@@ -1,0 +1,49 @@
+// javascript code for allowing expansion/contraction of text
+// original code from M. C. Matti  
+// http://www.webreference.com/programming/css_content/index.html
+
+// looks for +/- character and flips it and reverses display state
+// foc = focus of attention, first child element of current location (loc)
+// (check use of innerHTML command)
+//       foc.innerHTML=foc.innerHTML=='+'?'-':'+';
+//       foc.innerHTML=foc.innerHTML=='more'?'less':'more';
+
+function dsp(loc){
+   if(document.getElementById){
+       var foc=loc.firstChild;
+       foc=loc.firstChild.innerHTML?
+          loc.firstChild:
+          loc.firstChild.previousSibling;
+       foc.innerHTML=foc.innerHTML=='+'?'-':'+';
+       foc=loc.parentNode.previousSibling.style?
+          loc.parentNode.previousSibling:
+          loc.parentNode.previousSibling.previousSibling;
+       foc.style.display=foc.style.display=='block'?'none':'block';
+   }
+} 
+
+function dspml(loc){
+   if(document.getElementById){
+       var foc=loc.firstChild;
+       foc=loc.firstChild.innerHTML?
+          loc.firstChild:
+          loc.firstChild.previousSibling;
+       foc.innerHTML=foc.innerHTML=='more'?'less':'more';
+       foc=loc.parentNode.previousSibling.style?
+          loc.parentNode.previousSibling:
+          loc.parentNode.previousSibling.previousSibling;
+       foc.style.display=foc.style.display=='block'?'none':'block';
+   }
+} 
+// another method is below
+// original code from Jennifer Kymin 
+// http://webdesign.about.com/od/dhtml/a/aa101507.htm
+//     item.className=(item.className=='hidden')?'unhidden':'hidden';
+
+function unhide(divID) {
+  var item = document.getElementById(divID);
+  if (item) {
+     item.className=(item.className=='hidden')?'unhidden':'hidden';
+  }
+}
+

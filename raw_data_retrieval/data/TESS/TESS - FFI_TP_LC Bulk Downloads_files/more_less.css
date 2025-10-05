@@ -1,0 +1,40 @@
+/* css for allowing expand/contract text */
+/* original code from M. C. Matti  */
+/* http://www.webreference.com/programming/css_content/index.html */
+
+/* allows persistence for IE users (?)
+.save{ behavior:url(#default#savehistory);}
+
+/* suppress underlining of link */
+a.dsphead{ text-decoration:none;}
+/*  margin-left:1.5em;}
+/*link confirmation during mouseover */
+a.dsphead:hover{ text-decoration:underline;}
+/* defines collapse cues */
+/*  font-size: medium; */
+a.dsphead span.dspchar{
+  font-family:monospace;
+  font-weight:normal;}
+
+/* same as above but uses smaller font for word cues */
+a.dspheadml span.dspchar{
+  font-family:monospace;
+  font-size: medium;
+  font-weight:normal;}
+/*link confirmation during mouseover */
+a.dspheadml:hover{ text-decoration:underline;}
+/* suppress underlining of link */
+a.dspheadml{ text-decoration:none;}
+
+/*  hides subordinate sections by default */
+.dspcont{ display:none;}
+/*   margin-left:1.5em;}
+
+
+/* another method is below */
+/* original code from Jennifer Kymin  */
+/* http://webdesign.about.com/od/dhtml/a/aa101507.htm */
+
+.hidden { display: none; }
+.unhidden { display: block; }
+
