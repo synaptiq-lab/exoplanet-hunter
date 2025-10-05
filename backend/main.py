@@ -1417,10 +1417,71 @@ async def exominer_analyze_workflow(
                 detail="Le fichier doit être au format CSV"
             )
         
-        # Lire et créer l'analyse
+        # Lire le CSV
         contents = await file.read()
         csv_content = contents.decode('utf-8')
         
+        # Détecter si le CSV contient la colonne sector_run
+        import polars as pl
+        from exominer_helper import get_sectors_from_tic, format_inputs
+        
+        csv_buffer = io.StringIO(csv_content)
+        df = pl.read_csv(csv_buffer)
+        
+        # Vérifier les colonnes présentes
+        has_sector_run = 'sector_run' in df.columns
+        has_sectors = 'sectors' in df.columns
+        has_tic_id = 'tic_id' in df.columns
+        
+        if not has_tic_id:
+            raise HTTPException(status_code=400, detail="Le CSV doit contenir au moins une colonne 'tic_id'")
+        
+        # Si pas de sector_run ni sectors, récupérer automatiquement via astroquery
+        if not has_sector_run and not has_sectors:
+            logger.info(f"⚙️ Aucune colonne 'sector_run' ou 'sectors' détectée, récupération automatique via astroquery...")
+            
+            tic_ids = df['tic_id'].to_list()
+            logger.info(f"📡 Récupération des secteurs pour {len(tic_ids)} TIC IDs...")
+            
+            sectors_data = []
+            for tic in tic_ids:
+                try:
+                    sectors_list = get_sectors_from_tic(tic)
+                    if not sectors_list:
+                        logger.warning(f"⚠️ Aucun secteur trouvé pour TIC {tic}")
+                        sectors_list = []
+                    sectors_data.append(sectors_list)
+                except Exception as e:
+                    logger.error(f"❌ Erreur récupération secteurs pour TIC {tic}: {e}")
+                    sectors_data.append([])
+            
+            # Créer un nouveau DataFrame avec les secteurs
+            df_with_sectors = pl.DataFrame({
+                'tic_id': tic_ids,
+                'sectors': sectors_data
+            })
+            
+            # Formater avec format_inputs()
+            formatted_df = format_inputs(df_with_sectors)
+            
+            # Générer le nouveau CSV
+            csv_buffer_out = io.StringIO()
+            formatted_df.write_csv(csv_buffer_out)
+            csv_content = csv_buffer_out.getvalue()
+            
+            logger.info(f"✅ CSV formaté généré avec {len(formatted_df)} lignes (sector_run ajoutés)")
+        elif has_sectors and not has_sector_run:
+            # Si sectors existe mais pas sector_run, formater
+            logger.info(f"⚙️ Colonne 'sectors' détectée, formatage avec format_inputs()...")
+            formatted_df = format_inputs(df)
+            csv_buffer_out = io.StringIO()
+            formatted_df.write_csv(csv_buffer_out)
+            csv_content = csv_buffer_out.getvalue()
+            logger.info(f"✅ CSV formaté généré avec {len(formatted_df)} lignes")
+        else:
+            logger.info(f"✅ CSV contient déjà 'sector_run', utilisation directe")
+        
+        # Créer l'analyse avec le CSV (formaté si nécessaire)
         success, message, analysis_id = exominer_service.create_analysis(
             csv_content=csv_content,
             filename=file.filename
