@@ -1,0 +1,23 @@
+import polars as pl
+
+
+def build_exominer_results_table(path_to_result_csv: str) -> pl.DataFrame:
+     return (
+        pl.scan_csv(path_to_result_csv)
+        .select(["target_id", "score"])
+        .group_by("target_id")
+        .agg(pl.col("score").max())
+        .with_columns(
+            pl.when(pl.col("score") <= 0.5).then(pl.lit("False Positive"))
+            .when(pl.col("score") <= 0.9).then(pl.lit("Candidate"))
+            .otherwise(pl.lit("Confirmed"))
+            .alias("result")
+        )
+        .rename({"target_id": "tic"})
+        .select(["tic", "result", "score"])
+        .collect()
+    )
+
+
+if __name__ == "__main__":
+    print(build_exominer_results_table("../data/predictions_outputs.csv"))
