@@ -52,7 +52,7 @@ const LandingPage = () => {
         {/* CTA buttons */}
         <div className={styles.ctaRow}>
           <Link
-            href="/en-savoir-plus"
+            href="/dashboard"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
