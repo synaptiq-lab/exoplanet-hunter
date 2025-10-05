@@ -3,7 +3,7 @@ Script de test rapide pour un seul fichier FITS
 Utilisez ce script pour tester avant de traiter tous les fichiers
 """
 
-from extract_fits_to_csv import process_single_fits, extract_tic_from_filename, extract_sector_from_filename
+from get_csv_from_fits import process_single_fits, extract_tic_from_filename, extract_sector_from_filename
 from pathlib import Path
 import pandas as pd
 
