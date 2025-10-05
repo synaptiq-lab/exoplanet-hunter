@@ -13,14 +13,14 @@ const TransitSection: React.FC<TransitSectionProps> = ({ className }) => {
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <FadeIn delayMs={0}>
           <h3 style={{ color: 'white', fontSize: 35, lineHeight: 1.1, margin: '0 0 16px 0', textAlign: 'center' }}>
-            Qu'est-ce que la méthode du transit ?
+            What is the transit method?
           </h3>
         </FadeIn>
         <FadeIn delayMs={120}>
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <img
               src="/team/transit.gif"
-              alt="Animation illustrant la méthode du transit"
+              alt="Animation illustrating the transit method"
               style={{
                 width: '100%',
                 maxWidth: 900,
@@ -48,11 +48,11 @@ const TransitSection: React.FC<TransitSectionProps> = ({ className }) => {
               marginRight: 'auto'
             }}
           >
-            Lorsqu'une planète passe devant son étoile, la luminosité observée baisse légèrement.
-            En mesurant ces creux périodiques dans la courbe de lumière, on déduit la présence de
-            l'exoplanète ainsi que des indices sur sa taille et son orbite. Notre mission était de créer
-            une application permettant de détecter les exoplanètes en utilisant des modèles de machine
-            learning. Nous avons utilisé les données de la mission Kepler, K2 et TESS pour entraîner nos modèles.
+            When a planet passes in front of its star, the observed brightness drops slightly.
+            By measuring these periodic dips in the light curve, we infer the presence of the exoplanet
+            as well as clues about its size and orbit. Our mission was to build an application to detect
+            exoplanets using machine learning models. We used data from the Kepler, K2, and TESS missions
+            to train our models.
           </p>
         </FadeIn>
       </div>

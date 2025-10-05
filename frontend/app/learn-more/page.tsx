@@ -3,37 +3,38 @@
 import * as React from "react";
 import MegaMenu from "@/components/ui/mega-menu";
 import type { MegaMenuItem } from "@/components/ui/mega-menu";
-import { Home, Info, Gauge, Github } from "lucide-react";
-import Particles from "@/components/Particles";
+import dynamic from "next/dynamic";
+const Particles = dynamic(() => import("@/components/Particles"), { ssr: false });
 import CardSwap, { Card } from "@/components/landing/CardSwap";
-import TransitSection from "@/components/landing/TransitSection";
-import About from "@/components/landing/About";
+const TransitSection = dynamic(() => import("@/components/landing/TransitSection"));
+const About = dynamic(() => import("@/components/landing/About"));
 import styles from './page.module.css';
-import TeamSection from "@/components/landing/TeamSection";
-import FadeIn from "@/components/landing/FadeIn";
+const TeamSection = dynamic(() => import("@/components/landing/TeamSection"));
+const FadeIn = dynamic(() => import("@/components/landing/FadeIn"));
 
-const EnSavoirPlusPage = () => {
+const LearnMorePage = () => {
   const NAV_ITEMS: MegaMenuItem[] = [
-    { id: 1, label: "En savoir plus", link: "/en-savoir-plus" },
+    { id: 1, label: "Learn more", link: "/learn-more" },
     { id: 2, label: "Home", link: "/home" },
     { id: 3, label: "Dashboard", link: "/dashboard" },
-    { id: 4, label: "GitHub", link: "https://github.com/" },
-    { id: 5, label: "Documentation", link: "https://www.spaceappschallenge.org/2025/challenges/a-world-away-hunting-for-exoplanets-with-ai/?tab=details" }
+    { id: 4, label: "GitHub", link: "https://github.com/synaptiq-lab/exoplanet-hunter" }
   ];
 
   return (
     <div style={{ position: 'relative', width: '100%', minHeight: '100vh', background: 'black' }}>
-      <Particles
-        className="particles-noninteractive"
-        particleColors={["#ffffff", "#ffffff"]}
-        particleCount={200}
-        particleSpread={10}
-        speed={0.1}
-        particleBaseSize={100}
-        moveParticlesOnHover={false}
-        alphaParticles={false}
-        disableRotation={false}
-      />
+      <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        <Particles
+          className="particles-noninteractive"
+          particleColors={["#ffffff", "#ffffff"]}
+          particleCount={200}
+          particleSpread={10}
+          speed={0.1}
+          particleBaseSize={100}
+          moveParticlesOnHover={false}
+          alphaParticles={false}
+          disableRotation={false}
+        />
+      </div>
 
       <header className="relative z-30 flex w-full items-start justify-center p-6">
         <div className="relative">
@@ -56,11 +57,11 @@ const EnSavoirPlusPage = () => {
             <FadeIn delayMs={0}>
               <div style={{ color: 'white' }}>
                 <h2 style={{ fontSize: 35, lineHeight: 1.1, margin: 0 }}>
-                  L'espace parle
+                  Space speaks
                   <br />
-                  L'IA écoute !
+                  AI listens!
                 </h2>
-                <p style={{ opacity: 0.8, marginTop: 12, fontSize: 20, lineHeight: 1.1 }}>L’intelligence artificielle au service de Kepler, K2 et TESS pour découvrir de nouveaux mondes.Découvrez comment l’intelligence artificielle redéfinit la chasse aux exoplanètes.</p>
+                <p style={{ opacity: 0.8, marginTop: 12, fontSize: 20, lineHeight: 1.1 }}>Artificial intelligence assisting Kepler, K2 and TESS to discover new worlds. Discover how AI is redefining the hunt for exoplanets.</p>
               </div>
             </FadeIn>
 
@@ -83,7 +84,7 @@ const EnSavoirPlusPage = () => {
                       loading="lazy"
                     />
                   </Card>
-                  <Card headerLabel="Tess">
+                  <Card headerLabel="TESS">
                     <img
                       src="/team/tess.jpg"
                       alt="TESS"
@@ -97,15 +98,15 @@ const EnSavoirPlusPage = () => {
           </div>
         </section>
 
-        {/* Glow divider avec plus d'espace avant la section transit */}
+        {/* Glow divider before transit section */}
         <div className={styles.dividerLarge} />
 
         <TransitSection />
 
-        {/* Glow divider avant About */}
+        {/* Glow divider before About */}
         <div className={styles.dividerBeforeAbout} />
 
-        {/* Section About – ajoutée à la suite */}
+        {/* About section */}
         <div className={styles.pagePad}>
           <About />
         </div>
@@ -114,6 +115,6 @@ const EnSavoirPlusPage = () => {
   );
 };
 
-export default EnSavoirPlusPage;
+export default LearnMorePage;
 
 
