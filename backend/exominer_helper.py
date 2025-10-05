@@ -26,21 +26,34 @@ def get_sectors_from_tic(tic: int) -> list[int]:
 
 
 def build_results_table(path_to_predictions_csv: str) -> pl.DataFrame:
-     return (
+    predictions_df = (
         pl.scan_csv(path_to_predictions_csv)
         .select(["target_id", "score"])
         .group_by("target_id")
         .agg(pl.col("score").max())
         .with_columns(
-            pl.when(pl.col("score") <= 0.5).then(pl.lit("False Positive"))
-            .when(pl.col("score") <= 0.9).then(pl.lit("Candidate"))
-            .otherwise(pl.lit("Confirmed"))
+            pl.when(pl.col("score") <= 0.5).then(pl.lit("False positive"))
+            .when(pl.col("score") <= 0.9).then(pl.lit("Planetary candidate"))
+            .otherwise(pl.lit("Confirmed planet"))
             .alias("result")
         )
         .rename({"target_id": "tic_id"})
         .select(["tic_id", "result", "score"])
-        .collect()
     )
+
+    tess_analyzed_df = (
+        pl.scan_parquet("data/tess-analyzed.parquet")
+        .rename({"TIC": "tic_id", "TOI Disposition": "official_disposition"})
+    )
+
+    results_df = (
+        predictions_df.join(tess_analyzed_df, on="tic_id")
+        .with_columns(
+            pl.col("official_disposition").fill_null("Not officially analyzed yet")
+        )
+    )
+
+    return results_df.collect()
 
 
 if __name__ == "__main__":
