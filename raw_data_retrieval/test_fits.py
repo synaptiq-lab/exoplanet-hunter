@@ -21,18 +21,9 @@ from pathlib import Path
 import json
 import sys
 
-try:
-    from astropy.io import fits
-    import pandas as pd
-    import numpy as np
-except ImportError as e:
-    print(f"❌ Erreur: Dépendances manquantes!")
-    print(f"   {e}")
-    print(f"\n💡 Pour installer les dépendances:")
-    print(f"   pip install astropy pandas numpy pyarrow")
-    print(f"\n   ou utilisez le fichier requirements:")
-    print(f"   pip install -r requirements_fits.txt")
-    sys.exit(1)
+from astropy.io import fits
+import pandas as pd
+import numpy as np
 
 
 def extract_fits_content(fits_file: Path, output_dir: Path):
