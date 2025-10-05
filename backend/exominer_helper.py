@@ -1,7 +1,23 @@
+from astroquery.mast import Observations
 import polars as pl
 
 
-def build_exominer_results_table(path_to_result_csv: str) -> pl.DataFrame:
+def get_sectors_from_tic(tic: int) -> list[int]:
+    try:
+        obs = Observations.query_criteria(
+            provenance_name="TESS-SPOC",
+            target_name=tic
+        )
+    except Exception:
+        return []
+
+    if len(obs) > 0:
+        return [int(x) for x in list(obs["sequence_number"])]
+
+    return []
+
+
+def build_results_table(path_to_result_csv: str) -> pl.DataFrame:
      return (
         pl.scan_csv(path_to_result_csv)
         .select(["target_id", "score"])
@@ -20,4 +36,5 @@ def build_exominer_results_table(path_to_result_csv: str) -> pl.DataFrame:
 
 
 if __name__ == "__main__":
-    print(build_exominer_results_table("../data/predictions_outputs.csv"))
+    # print(build_results_table("../data/predictions_outputs.csv"))
+    print(get_sectors_from_tic(51432))
