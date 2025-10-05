@@ -1279,6 +1279,26 @@ async def exominer_analyze_from_tics(request: Dict[str, Any]):
         from exominer_helper import get_sectors_from_tic, format_inputs
         import polars as pl
         
+        # Vérifier Docker
+        docker_available, docker_msg = exominer_service.check_docker()
+        if not docker_available:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Docker non disponible: {docker_msg}"
+            )
+        
+        # Vérifier l'image ExoMiner et la télécharger si nécessaire
+        image_available, image_msg = exominer_service.check_image()
+        if not image_available:
+            logger.info("🚀 Image ExoMiner non disponible, téléchargement automatique...")
+            pull_success, pull_msg = exominer_service.pull_image()
+            if not pull_success:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Impossible de télécharger l'image ExoMiner: {pull_msg}"
+                )
+            logger.info(f"✅ Image ExoMiner téléchargée avec succès")
+        
         tic_ids = request.get('tic_ids', [])
         sectors = request.get('sectors')
         params = request.get('params', {})
@@ -1395,7 +1415,7 @@ async def exominer_analyze_workflow(
         Autres: Paramètres ExoMiner
     """
     try:
-        # Vérifier Docker et l'image
+        # Vérifier Docker
         docker_available, docker_msg = exominer_service.check_docker()
         if not docker_available:
             raise HTTPException(
@@ -1403,12 +1423,17 @@ async def exominer_analyze_workflow(
                 detail=f"Docker non disponible: {docker_msg}"
             )
         
+        # Vérifier l'image ExoMiner et la télécharger si nécessaire
         image_available, image_msg = exominer_service.check_image()
         if not image_available:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Image ExoMiner non disponible. Utilisez /exominer/image/pull pour la télécharger."
-            )
+            logger.info("🚀 Image ExoMiner non disponible, téléchargement automatique...")
+            pull_success, pull_msg = exominer_service.pull_image()
+            if not pull_success:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Impossible de télécharger l'image ExoMiner: {pull_msg}"
+                )
+            logger.info(f"✅ Image ExoMiner téléchargée avec succès")
         
         # Vérifier extension
         if not file.filename.endswith('.csv'):
