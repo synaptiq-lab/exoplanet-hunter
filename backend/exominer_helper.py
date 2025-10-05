@@ -25,9 +25,9 @@ def get_sectors_from_tic(tic: int) -> list[int]:
     return []
 
 
-def build_results_table(path_to_result_csv: str) -> pl.DataFrame:
+def build_results_table(path_to_predictions_csv: str) -> pl.DataFrame:
      return (
-        pl.scan_csv(path_to_result_csv)
+        pl.scan_csv(path_to_predictions_csv)
         .select(["target_id", "score"])
         .group_by("target_id")
         .agg(pl.col("score").max())
