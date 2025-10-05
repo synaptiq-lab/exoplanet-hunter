@@ -65,7 +65,7 @@ const About: React.FC = () => {
   ];
 
   return (
-    <section id="about" className="py-20 bg-space-900/50">
+    <section id="about" className="py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* En-tête de section */}
         <motion.div
@@ -110,7 +110,7 @@ const About: React.FC = () => {
 
         {/* Méthode du Transit */}
         <motion.div
-          className="bg-gradient-to-r from-space-800/50 to-primary-900/20 rounded-2xl p-8 md:p-12 mb-20 border border-space-700"
+          className="rounded-2xl p-8 md:p-12 mb-20 border border-space-700/0"
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}

@@ -1,0 +1,20 @@
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,0.25) 50%, rgba(0,0,0,0) 100%);
+  box-shadow: 0 0 12px rgba(255,255,255,0.12);
+}
+
+.dividerLarge {
+  composes: divider;
+  margin: 250px 0 250px 0;
+}
+
+.dividerBeforeAbout {
+  composes: divider;
+  margin: 120px 0 48px 0;
+}
+
+.pagePad {
+  padding: 48px 24px;
+}
+
