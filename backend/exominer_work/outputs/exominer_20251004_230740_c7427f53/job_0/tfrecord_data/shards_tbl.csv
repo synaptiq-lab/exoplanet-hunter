@@ -1,4 +1,0 @@
-example_i_tfrec,shard,uid,target_id,tce_plnt_num,sector_run
-0,shard-00000-of-00001-node-2,167526485-1-S1-39,167526485,1,1-39
-1,shard-00000-of-00001-node-2,167526485-2-S1-39,167526485,2,1-39
-2,shard-00000-of-00001-node-2,167526485-1-S6,167526485,1,6
