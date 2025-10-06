@@ -236,7 +236,7 @@ export default function AnalyzePage() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="card p-6 mb-6"
+            className="card-solid p-6 mb-6"
           >
             <h3 className="text-xl font-semibold text-white mb-4">Mode d'analyse</h3>
             
@@ -338,9 +338,9 @@ export default function AnalyzePage() {
           >
             <div
               {...getRootProps()}
-              className={`card p-12 border-2 border-dashed cursor-pointer transition-all ${
+              className={`card-solid p-12 border-2 border-dashed cursor-pointer transition-all ${
                 isDragActive 
-                  ? 'border-primary-500 bg-primary-500/10' 
+                  ? 'border-primary-500' 
                   : 'border-space-600 hover:border-primary-500'
               }`}
             >

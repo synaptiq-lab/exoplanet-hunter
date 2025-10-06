@@ -6,7 +6,7 @@ services:
     environment:
       - PYTHONPATH=/app
       - CORS_ORIGINS=http://localhost:3000
-      - HOST_EXOMINER_PATH=C:/Users/lucho/Documents/project/exoplanet-hunter/backend/exominer_work  # Chemin sur l'hôte pour ExoMiner
+      - HOST_EXOMINER_PATH=C:/Users/Hugo HOUNTONDJI/ESGI-2025-Docker-IABD2/exoplanet-hunter/backend/exominer_work  # Chemin sur l'hôte pour ExoMiner
     volumes:
       - ./backend:/app
       - ./data:/app/data

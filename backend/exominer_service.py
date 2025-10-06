@@ -124,7 +124,7 @@ class ExoMinerService:
                 ["docker", "pull", IMAGE_NAME],
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 minutes max
+                timeout=3600  # 60 minutes max (image très volumineuse)
             )
             
             if result.returncode == 0:

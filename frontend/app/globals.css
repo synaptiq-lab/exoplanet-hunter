@@ -22,6 +22,11 @@
     @apply card transition-all duration-300 hover:bg-space-800/70 hover:border-primary-500/50 hover:shadow-primary-500/20;
   }
   
+  /* Variante opaque pour les cartes du dashboard (pas d'effet blur, pas de transparence) */
+  .card-solid {
+    @apply bg-space-800 border border-space-700 rounded-xl p-6 shadow-2xl;
+  }
+  
   .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary-500/50;
   }
